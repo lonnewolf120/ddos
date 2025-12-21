@@ -1,8 +1,85 @@
 @import "tailwindcss";
 
+/**
+ * CyberRange Blood - DDoS Attack Simulator Theme
+ * Professional red team operations interface with deep blood red background
+ */
+
 :root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  --primary: 0 84% 45%;
+  /* Deep blood red primary */
+  --radius: 0.5rem;
+}
+
+/* Dark theme - CyberRange Blood */
+.dark {
+  /* Core Background & Foreground */
+  --background: 0 20% 8%;
+  /* Deep blood red-black background */
+  --foreground: 0 15% 92%;
+  /* Blood-tinted white text */
+
+  /* Card Components */
+  --card: 0 25% 12%;
+  /* Dark blood red card background */
+  --card-foreground: 0 10% 88%;
+  /* Light blood-tinted text on cards */
+
+  /* Popover Components */
+  --popover: 0 30% 15%;
+  /* Dark crimson popover background */
+  --popover-foreground: 0 8% 90%;
+  /* Light text in popovers */
+
+  /* Primary Brand Colors */
+  --primary: 0 84% 55%;
+  /* Vibrant blood red primary */
+  --primary-foreground: 0 5% 95%;
+  /* Nearly white text on primary */
+
+  /* Secondary Colors */
+  --secondary: 0 22% 18%;
+  /* Dark blood red secondary */
+  --secondary-foreground: 0 12% 85%;
+  /* Light blood-tinted text on secondary */
+
+  /* Muted/Disabled States */
+  --muted: 0 18% 20%;
+  /* Muted blood red elements */
+  --muted-foreground: 0 15% 65%;
+  /* Mid-tone blood-tinted secondary text */
+
+  /* Accent Colors */
+  --accent: 0 75% 50%;
+  /* Bright blood red accent */
+  --accent-foreground: 0 5% 95%;
+  /* White text on accents */
+
+  /* Destructive/Error States */
+  --destructive: 0 90% 48%;
+  /* Intense blood red for errors */
+  --destructive-foreground: 0 3% 97%;
+  /* Pure white text on destructive */
+
+  /* UI Elements */
+  --border: 0 40% 25% / 0.4;
+  /* Blood red border with opacity */
+  --input: 0 25% 16%;
+  /* Dark blood red input backgrounds */
+  --ring: 0 84% 55%;
+  /* Blood red focus rings */
+
+  /* Chart Colors - Blood Red Spectrum */
+  --chart-1: 0 84% 55%;
+  /* Primary blood red */
+  --chart-2: 0 75% 45%;
+  /* Darker blood red */
+  --chart-3: 0 65% 35%;
+  /* Deep maroon */
+  --chart-4: 0 55% 25%;
+  /* Very dark blood red */
+  --chart-5: 15 70% 50%;
+  /* Crimson accent */
 }
 
 @theme inline {
@@ -13,42 +90,79 @@
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-geist-mono), monospace;
 }
 
-/* Custom scrollbar for dark mode */
+/**
+ * Blood Theme Scrollbar
+ */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  background: hsl(0 25% 12%);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #444;
-  border-radius: 4px;
+  background: hsl(0 40% 25%);
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: hsl(0 60% 35%);
 }
 
-/* Animation for attack pulse */
+/**
+ * Blood Glow Effects
+ */
+.blood-glow {
+  box-shadow: 0 0 20px rgba(220, 38, 38, 0.4);
+  transition: box-shadow 0.3s ease;
+}
+
+.blood-glow:hover {
+  box-shadow: 0 0 30px rgba(220, 38, 38, 0.6);
+}
+
+/**
+ * Pulsing Blood Animation
+ */
+.pulse-blood {
+  animation: pulse-blood 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-blood {
+
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 15px rgba(139, 0, 0, 0.3);
+  }
+
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 25px rgba(220, 38, 38, 0.5);
+  }
+}
+
+/* Attack pulse animation for active attacks */
 @keyframes attack-pulse {
 
   0%,
   100% {
     opacity: 1;
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
   }
 
   50% {
     opacity: 0.8;
-    box-shadow: 0 0 20px 10px rgba(239, 68, 68, 0);
+    box-shadow: 0 0 20px 10px rgba(220, 38, 38, 0);
   }
 }
 
@@ -56,10 +170,96 @@ body {
   animation: attack-pulse 1s ease-in-out infinite;
 }
 
-/* Gradient text utility */
+/**
+ * Gradient Text Utility
+ */
 .gradient-text {
-  background: linear-gradient(to right, #ef4444, #f97316);
+  background: linear-gradient(to right, hsl(0 84% 55%), hsl(15 85% 55%));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+/**
+ * Blood Text with Glow
+ */
+.blood-text {
+  color: hsl(0 80% 60%);
+  text-shadow: 0 0 5px rgba(220, 38, 38, 0.3);
+}
+
+/**
+ * Terminal/Console Styling
+ */
+.terminal {
+  background: hsl(0 30% 6%);
+  border: 1px solid hsl(0 60% 25% / 0.5);
+  color: hsl(0 15% 85%);
+  font-family: var(--font-geist-mono), monospace;
+  box-shadow: inset 0 0 20px rgba(139, 0, 0, 0.1);
+}
+
+/**
+ * Status Indicators
+ */
+.status-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+}
+
+.status-dot.online {
+  background-color: hsl(0 75% 45%);
+  box-shadow: 0 0 6px rgba(139, 0, 0, 0.8);
+}
+
+.status-dot.offline {
+  background-color: hsl(0 30% 25%);
+  box-shadow: 0 0 6px rgba(75, 0, 0, 0.6);
+}
+
+.status-dot.critical {
+  background-color: hsl(0 90% 48%);
+  box-shadow: 0 0 8px rgba(220, 38, 38, 0.8);
+  animation: pulse-blood 1.5s infinite;
+}
+
+/**
+ * Enhanced Typography
+ */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: hsl(var(--primary));
+  text-shadow: 0 0 8px rgba(220, 38, 38, 0.2);
+  font-family: var(--font-geist-mono), monospace;
+}
+
+/**
+ * Card Variants
+ */
+.card-elevated {
+  background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(0 20% 10%) 100%);
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 4px 6px -1px rgba(25, 0, 0, 0.4), 0 2px 4px -1px rgba(15, 0, 0, 0.3);
+  border-radius: var(--radius);
+}
+
+/**
+ * Reduced Motion Support
+ */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .pulse-blood,
+  .animate-attack-pulse {
+    animation: none;
+  }
 }

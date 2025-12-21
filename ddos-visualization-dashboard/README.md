@@ -6,10 +6,13 @@ A standalone, self-contained DDoS attack simulation and visualization dashboard 
 
 This dashboard provides:
 - **Network Topology Visualization**: Visual representation of Red Team (attackers) and Blue Team (targets) VMs
+- **Network Attack Map** ⭐ NEW: Real-time packet flow visualization with animated attack paths from source to target machines
+- **Cyber Attack Map**: Interactive real-time attack visualization with particle effects and network flow animations
 - **Real Attack Execution**: Executes actual DDoS attacks via SSH to Red Team VMs
 - **Real-time Monitoring**: WebSocket-based live attack logs and status updates
 - **Multiple Attack Types**: SYN Flood, UDP Flood, HTTP Flood (GoldenEye), Slowloris, ICMP Flood, HULK
 - **Distributed Attacks**: Launch attacks from multiple source VMs simultaneously
+- **Analytics Dashboard**: Attack statistics, VM status monitoring, and configuration summaries
 
 ## 🏗️ Architecture
 
@@ -186,6 +189,7 @@ sudo git clone https://github.com/grafov/hulk.git
 
 ## 📊 Usage Example
 
+### Network Topology Tab
 1. **Select Source VMs**: Click on Red Team VMs to select attack sources
 2. **Select Target**: Click on a Blue Team VM as the target
 3. **Configure Attack**:
@@ -195,6 +199,33 @@ sudo git clone https://github.com/grafov/hulk.git
 4. **Launch Attack**: Click "Launch Attack" button
 5. **Monitor**: Watch real-time logs and attack progress
 6. **Stop**: Click "Stop Attack" to terminate early
+
+### Attack Visualization Tab
+- **Cyber Attack Map**: Interactive network visualization showing:
+  - Red Team VMs (left side) - Attack sources with animated indicators
+  - Blue Team VMs (right side) - Target systems with threat indicators
+  - Real-time particle effects flowing from attackers to targets
+  - Animated attack flows with color-coded packet streams
+  - Central attack status indicator with rotation animation
+  - Live statistics overlay (sources, flows, packet count)
+  - Connection lines showing attack paths
+  - Pulsing indicators on active VMs
+  - Background grid for depth perception
+- **Live Attack Logs**: Real-time log viewer below the map
+- **Visual Indicators**:
+  - 🔴 Red border/glow = Active attacker
+  - 🟡 Yellow border/glow = Under attack
+  - 🟢 Green = Online
+  - ⚫ Gray = Offline
+  - ⚡ Lightning icon = Attacking
+  - ⚠️ Alert icon = Target
+  - 🛡️ Shield icon = Idle defender
+
+### Analytics Tab
+- **Attack Statistics**: Total attacks, active sources, log entries, status
+- **VM Status Summary**: Red Team and Blue Team online/offline counts with progress bars
+- **Configuration Summary**: Current attack type, port, duration, workers, sockets
+- **Recent Activity**: Last 10 log entries for quick review
 
 ## 🔐 Security Notes
 
