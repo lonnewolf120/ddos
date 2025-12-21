@@ -1,10 +1,6 @@
 "use client";
 
-import React, { useRef, useEffect, useMemo, useState } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Text, RoundedBox, Float } from '@react-three/drei';
-import * as THREE from 'three';
-import { Activity, Zap, Target, Server } from 'lucide-react';
+import React, { useEffect, useRef, useCallback } from 'react';
 
 interface VMNode {
   id: string;
@@ -13,11 +9,6 @@ interface VMNode {
   role: string;
   status: 'online' | 'offline' | 'attacking' | 'target';
   port?: number;
-}
-
-export interface PacketStats {
-  sent: number;
-  received: number;
 }
 
 interface IsometricAttackMapProps {
@@ -29,402 +20,43 @@ interface IsometricAttackMapProps {
   isAttacking: boolean;
   attackType: string;
   packetsPerSecond?: number;
-  initialStats?: PacketStats;
-  onStatsUpdate?: (stats: PacketStats) => void;
 }
 
-// Modern color palette with RED theme
-const COLORS = {
-  // Backgrounds
-  bg: '#0a0a0f',
-  bgCard: '#12121a',
-  bgHover: '#1a1a24',
-
-  // Red theme for attackers
-  attackerPrimary: '#dc2626',
-  attackerSecondary: '#ef4444',
-  attackerGlow: '#f87171',
-  attackerDark: '#7f1d1d',
-
-  // Blue theme for targets
-  targetPrimary: '#2563eb',
-  targetSecondary: '#3b82f6',
-  targetGlow: '#60a5fa',
-  targetDark: '#1e3a8a',
-
-  // Neutral
-  inactive: '#374151',
-  inactiveLight: '#4b5563',
-
-  // Text
-  textPrimary: '#f9fafb',
-  textSecondary: '#9ca3af',
-  textMuted: '#6b7280',
-
-  // Accents
-  success: '#22c55e',
-  warning: '#f59e0b',
-
-  // Packet
-  packet: '#ef4444',
-  packetTrail: '#dc2626',
-};
-
-// Packet component for 3D visualization
-interface PacketProps {
-  startPos: [number, number, number];
-  endPos: [number, number, number];
+interface Packet {
+  id: number;
+  x: number;
+  y: number;
+  z: number;
+  targetX: number;
+  targetY: number;
+  targetZ: number;
+  progress: number;
   speed: number;
-  onComplete: () => void;
-  seqNum: number;
+  sourceIp: string;
+  targetIp: string;
+  targetPort: number;
+  protocol: string;
+  size: number;
 }
 
-const Packet: React.FC<PacketProps> = ({ startPos, endPos, speed, onComplete, seqNum }) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const progressRef = useRef(0);
-  const trailRef = useRef<THREE.Points>(null);
-
-  useFrame((_, delta) => {
-    if (!meshRef.current) return;
-
-    progressRef.current += delta * speed;
-
-    if (progressRef.current >= 1) {
-      onComplete();
-      return;
-    }
-
-    const t = progressRef.current;
-    const x = startPos[0] + (endPos[0] - startPos[0]) * t;
-    const y = startPos[1] + (endPos[1] - startPos[1]) * t + Math.sin(t * Math.PI) * 0.3;
-    const z = startPos[2] + (endPos[2] - startPos[2]) * t;
-
-    meshRef.current.position.set(x, y, z);
-  });
-
-  return (
-    <group>
-      <mesh ref={meshRef} position={startPos}>
-        <boxGeometry args={[0.15, 0.08, 0.08]} />
-        <meshStandardMaterial
-          color={COLORS.packet}
-          emissive={COLORS.packet}
-          emissiveIntensity={0.5}
-        />
-      </mesh>
-    </group>
-  );
-};
-
-// 3D Computer/Server component
-interface ComputerProps {
-  position: [number, number, number];
+interface ServerPosition {
+  x: number;
+  y: number;
+  z: number;
   vm: VMNode;
-  isActive: boolean;
-  isTarget: boolean;
   isRedTeam: boolean;
 }
 
-const Computer: React.FC<ComputerProps> = ({ position, vm, isActive, isTarget, isRedTeam }) => {
-  const groupRef = useRef<THREE.Group>(null);
-
-  const color = useMemo(() => {
-    if (!isActive) return COLORS.inactive;
-    return isTarget ? COLORS.targetPrimary : COLORS.attackerPrimary;
-  }, [isActive, isTarget]);
-
-  const glowColor = useMemo(() => {
-    if (!isActive) return COLORS.inactiveLight;
-    return isTarget ? COLORS.targetGlow : COLORS.attackerGlow;
-  }, [isActive, isTarget]);
-
-  useFrame((state) => {
-    if (groupRef.current && isActive) {
-      groupRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.5) * 0.05;
-    }
-  });
-
-  return (
-    <group ref={groupRef} position={position}>
-      {/* Computer Tower */}
-      <RoundedBox args={[0.6, 0.9, 0.4]} radius={0.05} smoothness={4} position={[0, 0.45, 0]}>
-        <meshStandardMaterial
-          color={color}
-          metalness={0.3}
-          roughness={0.7}
-        />
-      </RoundedBox>
-
-      {/* Screen/Monitor */}
-      <RoundedBox args={[0.7, 0.5, 0.05]} radius={0.02} smoothness={4} position={[0, 1.15, 0.2]}>
-        <meshStandardMaterial
-          color="#1a1a24"
-          metalness={0.5}
-          roughness={0.5}
-        />
-      </RoundedBox>
-
-      {/* Screen display */}
-      <mesh position={[0, 1.15, 0.23]}>
-        <planeGeometry args={[0.6, 0.4]} />
-        <meshStandardMaterial
-          color={isActive ? glowColor : '#1f2937'}
-          emissive={isActive ? glowColor : '#000000'}
-          emissiveIntensity={isActive ? 0.3 : 0}
-        />
-      </mesh>
-
-      {/* Power LED */}
-      <mesh position={[0.2, 0.2, 0.21]}>
-        <sphereGeometry args={[0.03, 16, 16]} />
-        <meshStandardMaterial
-          color={isActive ? COLORS.success : '#374151'}
-          emissive={isActive ? COLORS.success : '#000000'}
-          emissiveIntensity={isActive ? 1 : 0}
-        />
-      </mesh>
-
-      {/* Glow ring for active */}
-      {isActive && (
-        <mesh position={[0, 0.5, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[0.5, 0.55, 32]} />
-          <meshBasicMaterial
-            color={glowColor}
-            transparent
-            opacity={0.4}
-          />
-        </mesh>
-      )}
-
-      {/* IP Label */}
-      <Text
-        position={[0, -0.2, 0.3]}
-        fontSize={0.1}
-        color={COLORS.textPrimary}
-        anchorX="center"
-        anchorY="middle"
-        font="/fonts/roboto-mono.woff"
-      >
-        {vm.ip}
-      </Text>
-
-      {/* Name Label */}
-      <Text
-        position={[0, -0.35, 0.3]}
-        fontSize={0.08}
-        color={isActive ? glowColor : COLORS.textMuted}
-        anchorX="center"
-        anchorY="middle"
-      >
-        {vm.name.substring(0, 12)}
-      </Text>
-    </group>
-  );
-};
-
-// Connection line between computers
-interface ConnectionLineProps {
-  start: [number, number, number];
-  end: [number, number, number];
-  isActive: boolean;
-}
-
-const ConnectionLine: React.FC<ConnectionLineProps> = ({ start, end, isActive }) => {
-  const line = useMemo(() => {
-    const curve = new THREE.QuadraticBezierCurve3(
-      new THREE.Vector3(...start),
-      new THREE.Vector3((start[0] + end[0]) / 2, Math.max(start[1], end[1]) + 0.5, (start[2] + end[2]) / 2),
-      new THREE.Vector3(...end)
-    );
-    const points = curve.getPoints(50);
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({
-      color: isActive ? COLORS.attackerSecondary : COLORS.inactive,
-      transparent: true,
-      opacity: isActive ? 0.8 : 0.3
-    });
-    return new THREE.Line(geometry, material);
-  }, [start, end, isActive]);
-
-  return <primitive object={line} />;
-};
-
-// Packets Manager component
-interface PacketsManagerProps {
-  sources: { id: string; position: [number, number, number] }[];
-  target: { id: string; position: [number, number, number] } | null;
-  isAttacking: boolean;
-  onPacketComplete: () => void;
-  packetsPerSecond: number;
-}
-
-const PacketsManager: React.FC<PacketsManagerProps> = ({
-  sources,
-  target,
-  isAttacking,
-  onPacketComplete,
-  packetsPerSecond
-}) => {
-  const [packets, setPackets] = useState<{ id: number; sourcePos: [number, number, number]; seqNum: number }[]>([]);
-  const packetIdRef = useRef(0);
-  const lastSpawnRef = useRef(0);
-
-  useFrame((state) => {
-    if (!isAttacking || !target || sources.length === 0) return;
-
-    const now = state.clock.elapsedTime * 1000;
-    const spawnInterval = 1000 / packetsPerSecond;
-
-    if (now - lastSpawnRef.current > spawnInterval) {
-      const newPackets = sources.map(source => ({
-        id: packetIdRef.current++,
-        sourcePos: source.position,
-        seqNum: packetIdRef.current % 9999
-      }));
-
-      setPackets(prev => [...prev, ...newPackets]);
-      lastSpawnRef.current = now;
-    }
-  });
-
-  const handlePacketComplete = (id: number) => {
-    setPackets(prev => prev.filter(p => p.id !== id));
-    onPacketComplete();
+// Convert 3D isometric coordinates to 2D screen coordinates
+const isoTo2D = (x: number, y: number, z: number, offsetX: number, offsetY: number): { screenX: number; screenY: number } => {
+  const isoX = (x - y) * 0.866; // cos(30°)
+  const isoY = (x + y) * 0.5 - z;
+  return {
+    screenX: isoX * 60 + offsetX,
+    screenY: isoY * 60 + offsetY
   };
-
-  if (!target) return null;
-
-  return (
-    <>
-      {packets.map(packet => (
-        <Packet
-          key={packet.id}
-          startPos={packet.sourcePos}
-          endPos={target.position}
-          speed={0.8 + Math.random() * 0.4}
-          onComplete={() => handlePacketComplete(packet.id)}
-          seqNum={packet.seqNum}
-        />
-      ))}
-    </>
-  );
 };
 
-// Main 3D Scene
-interface SceneProps {
-  redTeamVMs: VMNode[];
-  blueTeamVMs: VMNode[];
-  selectedSources: string[];
-  selectedTarget: string | null;
-  isAttacking: boolean;
-  onPacketReceived: () => void;
-  packetsPerSecond: number;
-}
-
-const Scene: React.FC<SceneProps> = ({
-  redTeamVMs,
-  blueTeamVMs,
-  selectedSources,
-  selectedTarget,
-  isAttacking,
-  onPacketReceived,
-  packetsPerSecond
-}) => {
-  const redTeamPositions = useMemo(() => {
-    return redTeamVMs.map((vm, index) => ({
-      vm,
-      position: [-3, 0, (index - (redTeamVMs.length - 1) / 2) * 2] as [number, number, number]
-    }));
-  }, [redTeamVMs]);
-
-  const blueTeamPositions = useMemo(() => {
-    return blueTeamVMs.map((vm, index) => ({
-      vm,
-      position: [3, 0, (index - (blueTeamVMs.length - 1) / 2) * 2.5] as [number, number, number]
-    }));
-  }, [blueTeamVMs]);
-
-  const sourcesWithPositions = useMemo(() => {
-    return redTeamPositions
-      .filter(item => selectedSources.includes(item.vm.id))
-      .map(item => ({ id: item.vm.id, position: item.position }));
-  }, [redTeamPositions, selectedSources]);
-
-  const targetWithPosition = useMemo(() => {
-    const target = blueTeamPositions.find(item => item.vm.id === selectedTarget);
-    return target ? { id: target.vm.id, position: target.position } : null;
-  }, [blueTeamPositions, selectedTarget]);
-
-  return (
-    <>
-      {/* Lighting */}
-      <ambientLight intensity={0.4} />
-      <pointLight position={[10, 10, 10]} intensity={1} color="#ffffff" />
-      <pointLight position={[-10, 10, -10]} intensity={0.5} color="#3b82f6" />
-      <pointLight position={[0, -5, 0]} intensity={0.3} color="#ef4444" />
-
-      {/* Grid floor */}
-      <gridHelper args={[20, 20, COLORS.inactive, COLORS.inactive]} position={[0, -0.5, 0]} />
-
-      {/* Red Team Computers */}
-      {redTeamPositions.map(({ vm, position }) => (
-        <Computer
-          key={vm.id}
-          position={position}
-          vm={vm}
-          isActive={selectedSources.includes(vm.id)}
-          isTarget={false}
-          isRedTeam={true}
-        />
-      ))}
-
-      {/* Blue Team Computers */}
-      {blueTeamPositions.map(({ vm, position }) => (
-        <Computer
-          key={vm.id}
-          position={position}
-          vm={vm}
-          isActive={vm.id === selectedTarget}
-          isTarget={vm.id === selectedTarget}
-          isRedTeam={false}
-        />
-      ))}
-
-      {/* Connection Lines */}
-      {sourcesWithPositions.map(source => (
-        targetWithPosition && (
-          <ConnectionLine
-            key={`line-${source.id}`}
-            start={source.position}
-            end={targetWithPosition.position}
-            isActive={isAttacking}
-          />
-        )
-      ))}
-
-      {/* Packets */}
-      <PacketsManager
-        sources={sourcesWithPositions}
-        target={targetWithPosition}
-        isAttacking={isAttacking}
-        onPacketComplete={onPacketReceived}
-        packetsPerSecond={packetsPerSecond}
-      />
-
-      {/* Camera controls */}
-      <OrbitControls
-        enablePan={true}
-        enableZoom={true}
-        enableRotate={true}
-        minDistance={5}
-        maxDistance={20}
-        target={[0, 0.5, 0]}
-      />
-    </>
-  );
-};
-
-// Main exported component
 export const IsometricAttackMap: React.FC<IsometricAttackMapProps> = ({
   redTeamVMs,
   blueTeamVMs,
@@ -433,45 +65,16 @@ export const IsometricAttackMap: React.FC<IsometricAttackMapProps> = ({
   targetPort,
   isAttacking,
   attackType,
-  packetsPerSecond = 15,
-  initialStats,
-  onStatsUpdate
+  packetsPerSecond = 50
 }) => {
-  // Use ref to persist packet count across re-renders
-  const statsRef = useRef(initialStats || { sent: 0, received: 0 });
-  const [displayStats, setDisplayStats] = useState(initialStats || { sent: 0, received: 0 });
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationRef = useRef<number>();
+  const packetsRef = useRef<Packet[]>([]);
+  const packetIdRef = useRef(0);
+  const lastSpawnRef = useRef(0);
+  const statsRef = useRef({ sent: 0, received: 0, dropped: 0 });
 
-  // Sync with initialStats when component mounts or initialStats changes
-  useEffect(() => {
-    if (initialStats) {
-      statsRef.current = { ...initialStats };
-      setDisplayStats({ ...initialStats });
-    }
-  }, [initialStats]);
-
-  // Only reset when attack starts fresh, not on every render
-  const attackStartedRef = useRef(false);
-
-  useEffect(() => {
-    if (isAttacking && !attackStartedRef.current) {
-      attackStartedRef.current = true;
-      // Don't reset - keep counting
-    } else if (!isAttacking) {
-      attackStartedRef.current = false;
-    }
-  }, [isAttacking]);
-
-  const handlePacketReceived = () => {
-    statsRef.current.sent += 1;
-    statsRef.current.received += 1;
-    const newStats = { ...statsRef.current };
-    setDisplayStats(newStats);
-    // Notify parent of stats update
-    if (onStatsUpdate) {
-      onStatsUpdate(newStats);
-    }
-  };
-
+  // Get protocol based on attack type
   const getProtocol = (type: string): string => {
     switch (type) {
       case 'syn_flood': return 'TCP SYN';
@@ -479,127 +82,561 @@ export const IsometricAttackMap: React.FC<IsometricAttackMapProps> = ({
       case 'http_flood': return 'HTTP';
       case 'slowloris': return 'HTTP';
       case 'icmp_flood': return 'ICMP';
-      case 'hulk': return 'HULK';
+      case 'hulk': return 'HTTP';
       default: return 'TCP';
     }
   };
 
+  // Draw isometric computer/server block (like draw.io style)
+  const drawIsometricServer = useCallback((
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    z: number,
+    offsetX: number,
+    offsetY: number,
+    color: string,
+    isActive: boolean,
+    isTarget: boolean,
+    vm: VMNode
+  ) => {
+    const { screenX, screenY } = isoTo2D(x, y, z, offsetX, offsetY);
+
+    // Computer block dimensions
+    const width = 45;
+    const height = 55;
+    const depth = 35;
+
+    // Base colors
+    const baseColor = isTarget ? '#fbbf24' : (isActive ? '#ef4444' : '#4b5563');
+
+    // Draw shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.beginPath();
+    ctx.ellipse(screenX, screenY + 5, 40, 18, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // === MONITOR (Top part) ===
+    const monitorHeight = height * 0.6;
+    const monitorWidth = width * 0.9;
+    const monitorDepth = depth * 0.2;
+
+    // Monitor back face
+    ctx.fillStyle = isActive ? '#1f2937' : '#111827';
+    ctx.beginPath();
+    ctx.moveTo(screenX - monitorWidth * 0.866, screenY - height - monitorDepth * 0.25);
+    ctx.lineTo(screenX - monitorWidth * 0.866, screenY - height + monitorHeight - monitorDepth * 0.25);
+    ctx.lineTo(screenX, screenY - height + monitorHeight - monitorDepth * 0.5);
+    ctx.lineTo(screenX, screenY - height - monitorDepth * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Monitor front face (screen)
+    ctx.fillStyle = isActive ? '#1e293b' : '#0f172a';
+    ctx.beginPath();
+    ctx.moveTo(screenX, screenY - height);
+    ctx.lineTo(screenX - monitorWidth * 0.866, screenY - height - monitorDepth * 0.25);
+    ctx.lineTo(screenX - monitorWidth * 0.866, screenY - height + monitorHeight - monitorDepth * 0.25);
+    ctx.lineTo(screenX, screenY - height + monitorHeight);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Screen display area
+    const screenPadding = 6;
+    ctx.fillStyle = isActive ? '#0ea5e9' : '#1e3a8a';
+    ctx.beginPath();
+    ctx.moveTo(screenX - screenPadding, screenY - height + screenPadding);
+    ctx.lineTo(screenX - monitorWidth * 0.866 + screenPadding, screenY - height - monitorDepth * 0.25 + screenPadding);
+    ctx.lineTo(screenX - monitorWidth * 0.866 + screenPadding, screenY - height + monitorHeight - monitorDepth * 0.25 - screenPadding);
+    ctx.lineTo(screenX - screenPadding, screenY - height + monitorHeight - screenPadding);
+    ctx.closePath();
+    ctx.fill();
+
+    // Screen glow effect for active
+    if (isActive) {
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = isTarget ? '#fbbf24' : '#0ea5e9';
+      ctx.fillStyle = isTarget ? 'rgba(251, 191, 36, 0.3)' : 'rgba(14, 165, 233, 0.3)';
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    // Monitor side face
+    ctx.fillStyle = isActive ? '#334155' : '#1e293b';
+    ctx.beginPath();
+    ctx.moveTo(screenX, screenY - height);
+    ctx.lineTo(screenX + monitorWidth * 0.866, screenY - height - monitorDepth * 0.25);
+    ctx.lineTo(screenX + monitorWidth * 0.866, screenY - height + monitorHeight - monitorDepth * 0.25);
+    ctx.lineTo(screenX, screenY - height + monitorHeight);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // === COMPUTER BASE/TOWER ===
+    const baseHeight = height * 0.35;
+    const baseY = screenY - baseHeight;
+
+    // Left face
+    ctx.fillStyle = isActive
+      ? (isTarget ? 'hsl(45, 60%, 35%)' : 'hsl(0, 60%, 35%)')
+      : '#374151';
+    ctx.beginPath();
+    ctx.moveTo(screenX - width * 0.866, baseY - depth * 0.25);
+    ctx.lineTo(screenX - width * 0.866, baseY + baseHeight - depth * 0.25);
+    ctx.lineTo(screenX, baseY + baseHeight);
+    ctx.lineTo(screenX, baseY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Right face
+    ctx.fillStyle = isActive
+      ? (isTarget ? 'hsl(45, 60%, 45%)' : 'hsl(0, 60%, 45%)')
+      : '#4b5563';
+    ctx.beginPath();
+    ctx.moveTo(screenX, baseY);
+    ctx.lineTo(screenX + width * 0.866, baseY - depth * 0.25);
+    ctx.lineTo(screenX + width * 0.866, baseY + baseHeight - depth * 0.25);
+    ctx.lineTo(screenX, baseY + baseHeight);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Top face
+    ctx.fillStyle = isActive
+      ? (isTarget ? 'hsl(45, 60%, 55%)' : 'hsl(0, 60%, 55%)')
+      : '#6b7280';
+    ctx.beginPath();
+    ctx.moveTo(screenX, baseY);
+    ctx.lineTo(screenX - width * 0.866, baseY - depth * 0.25);
+    ctx.lineTo(screenX, baseY - depth * 0.5);
+    ctx.lineTo(screenX + width * 0.866, baseY - depth * 0.25);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Computer details - Power LED
+    ctx.fillStyle = isActive ? '#22c55e' : '#374151';
+    ctx.beginPath();
+    ctx.arc(screenX + 15, baseY + 10, 4, 0, Math.PI * 2);
+    ctx.fill();
+    if (isActive) {
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#22c55e';
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    // Drive bay lines
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(screenX + 8, baseY + 18);
+    ctx.lineTo(screenX + 22, baseY + 18);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(screenX + 8, baseY + 24);
+    ctx.lineTo(screenX + 22, baseY + 24);
+    ctx.stroke();
+
+    // Activity pulse for attacking/target
+    if (isActive && isAttacking) {
+      ctx.shadowBlur = 25;
+      ctx.shadowColor = isTarget ? '#fbbf24' : '#ef4444';
+      ctx.strokeStyle = isTarget ? '#fbbf24' : '#ef4444';
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      ctx.arc(screenX, screenY - height / 2, 45, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+    }
+
+    // IP Label
+    ctx.fillStyle = isActive ? '#ffffff' : '#9ca3af';
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(vm.ip, screenX, screenY + 20);
+
+    // Name label
+    ctx.fillStyle = isActive
+      ? (isTarget ? '#fbbf24' : '#ef4444')
+      : '#6b7280';
+    ctx.font = '9px monospace';
+    ctx.fillText(vm.name.substring(0, 15), screenX, screenY + 33);
+
+    // Port indicator for target
+    if (isTarget && targetPort) {
+      ctx.fillStyle = '#fbbf24';
+      ctx.font = 'bold 9px monospace';
+      ctx.fillText(`:${targetPort}`, screenX, screenY + 45);
+    }
+
+    return { screenX, screenY: screenY - height / 2 };
+  }, [isAttacking, targetPort]);
+
+  // Draw packet as a small data cube
+  const drawPacket = useCallback((
+    ctx: CanvasRenderingContext2D,
+    packet: Packet,
+    offsetX: number,
+    offsetY: number
+  ) => {
+    const { screenX, screenY } = isoTo2D(packet.x, packet.y, packet.z, offsetX, offsetY);
+
+    const size = 4 + packet.size * 0.5;
+
+    // Packet color based on protocol
+    let color = '#ef4444';
+    switch (packet.protocol) {
+      case 'TCP SYN': color = '#ef4444'; break;
+      case 'UDP': color = '#f97316'; break;
+      case 'HTTP': color = '#eab308'; break;
+      case 'ICMP': color = '#22c55e'; break;
+    }
+
+    // Draw packet as small isometric cube
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = color;
+
+    // Simple diamond shape for speed
+    ctx.beginPath();
+    ctx.moveTo(screenX, screenY - size);
+    ctx.lineTo(screenX + size, screenY);
+    ctx.lineTo(screenX, screenY + size * 0.5);
+    ctx.lineTo(screenX - size, screenY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Bright center
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(screenX, screenY, size * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+  }, []);
+
+  // Draw connection line between machines
+  const drawConnectionLine = useCallback((
+    ctx: CanvasRenderingContext2D,
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    isActive: boolean
+  ) => {
+    if (!isActive) {
+      ctx.strokeStyle = 'rgba(100, 100, 100, 0.1)';
+      ctx.lineWidth = 1;
+    } else {
+      // Gradient line for active connection
+      const gradient = ctx.createLinearGradient(fromX, fromY, toX, toY);
+      gradient.addColorStop(0, 'rgba(220, 38, 38, 0.6)');
+      gradient.addColorStop(0.5, 'rgba(251, 146, 60, 0.4)');
+      gradient.addColorStop(1, 'rgba(234, 179, 8, 0.6)');
+      ctx.strokeStyle = gradient;
+      ctx.lineWidth = 2;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(fromX, fromY);
+    ctx.lineTo(toX, toY);
+    ctx.stroke();
+
+    // Dashed overlay for active
+    if (isActive) {
+      ctx.setLineDash([8, 4]);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }, []);
+
+  // Main animation loop
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Set canvas size
+    canvas.width = 1200;
+    canvas.height = 700;
+
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2 + 50;
+
+    // Calculate server positions
+    const serverPositions: ServerPosition[] = [];
+
+    // Red team positions (left side)
+    redTeamVMs.forEach((vm, index) => {
+      const spacing = 2.5;
+      const startZ = -(redTeamVMs.length - 1) * spacing / 2;
+      serverPositions.push({
+        x: -4,
+        y: 0,
+        z: startZ + index * spacing,
+        vm,
+        isRedTeam: true
+      });
+    });
+
+    // Blue team positions (right side)
+    blueTeamVMs.forEach((vm, index) => {
+      const spacing = 3;
+      const startZ = -(blueTeamVMs.length - 1) * spacing / 2;
+      serverPositions.push({
+        x: 4,
+        y: 0,
+        z: startZ + index * spacing,
+        vm,
+        isRedTeam: false
+      });
+    });
+
+    const protocol = getProtocol(attackType);
+    const spawnInterval = 1000 / packetsPerSecond;
+
+    const animate = (timestamp: number) => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw floor grid
+      ctx.strokeStyle = 'rgba(139, 0, 0, 0.15)';
+      ctx.lineWidth = 1;
+      for (let i = -10; i <= 10; i++) {
+        const start1 = isoTo2D(i, -10, 0, centerX, centerY);
+        const end1 = isoTo2D(i, 10, 0, centerX, centerY);
+        ctx.beginPath();
+        ctx.moveTo(start1.screenX, start1.screenY);
+        ctx.lineTo(end1.screenX, end1.screenY);
+        ctx.stroke();
+
+        const start2 = isoTo2D(-10, i, 0, centerX, centerY);
+        const end2 = isoTo2D(10, i, 0, centerX, centerY);
+        ctx.beginPath();
+        ctx.moveTo(start2.screenX, start2.screenY);
+        ctx.lineTo(end2.screenX, end2.screenY);
+        ctx.stroke();
+      }
+
+      // Store screen positions for drawing connections and packets
+      const screenPositions: Map<string, { x: number; y: number }> = new Map();
+
+      // Draw servers (sorted by depth for proper overlap)
+      const sortedServers = [...serverPositions].sort((a, b) => (a.x + a.z) - (b.x + b.z));
+
+      sortedServers.forEach(server => {
+        const isSource = selectedSources.includes(server.vm.id);
+        const isTarget = server.vm.id === selectedTarget;
+        const isActive = isSource || isTarget;
+
+        const pos = drawIsometricServer(
+          ctx,
+          server.x,
+          server.y,
+          server.z,
+          centerX,
+          centerY,
+          server.isRedTeam ? '#dc2626' : '#3b82f6',
+          isActive,
+          isTarget,
+          server.vm
+        );
+
+        screenPositions.set(server.vm.id, { x: pos.screenX, y: pos.screenY });
+      });
+
+      // Draw connection lines
+      if (selectedTarget) {
+        const targetPos = screenPositions.get(selectedTarget);
+        if (targetPos) {
+          selectedSources.forEach(sourceId => {
+            const sourcePos = screenPositions.get(sourceId);
+            if (sourcePos) {
+              drawConnectionLine(ctx, sourcePos.x, sourcePos.y, targetPos.x, targetPos.y, isAttacking);
+            }
+          });
+        }
+      }
+
+      // Spawn new packets during attack
+      if (isAttacking && selectedTarget && timestamp - lastSpawnRef.current > spawnInterval) {
+        const targetServer = serverPositions.find(s => s.vm.id === selectedTarget);
+
+        if (targetServer) {
+          selectedSources.forEach(sourceId => {
+            const sourceServer = serverPositions.find(s => s.vm.id === sourceId);
+            if (sourceServer) {
+              packetsRef.current.push({
+                id: packetIdRef.current++,
+                x: sourceServer.x,
+                y: sourceServer.y,
+                z: sourceServer.z,
+                targetX: targetServer.x,
+                targetY: targetServer.y,
+                targetZ: targetServer.z,
+                progress: 0,
+                speed: 0.015 + Math.random() * 0.01,
+                sourceIp: sourceServer.vm.ip,
+                targetIp: targetServer.vm.ip,
+                targetPort: targetPort,
+                protocol: protocol,
+                size: 2 + Math.random() * 3
+              });
+              statsRef.current.sent++;
+            }
+          });
+        }
+        lastSpawnRef.current = timestamp;
+      }
+
+      // Update and draw packets
+      packetsRef.current = packetsRef.current.filter(packet => {
+        packet.progress += packet.speed;
+
+        if (packet.progress >= 1) {
+          statsRef.current.received++;
+          return false;
+        }
+
+        // Interpolate position
+        packet.x = packet.x + (packet.targetX - packet.x) * packet.speed * 2;
+        packet.y = packet.y + (packet.targetY - packet.y) * packet.speed * 2;
+        packet.z = packet.z + (packet.targetZ - packet.z) * packet.speed * 2;
+
+        // Add slight wave motion
+        packet.y += Math.sin(packet.progress * Math.PI * 4) * 0.02;
+
+        drawPacket(ctx, packet, centerX, centerY);
+        return true;
+      });
+
+      // Draw stats panel
+      ctx.fillStyle = 'rgba(20, 0, 0, 0.9)';
+      ctx.fillRect(10, 10, 280, 130);
+      ctx.strokeStyle = 'rgba(220, 38, 38, 0.5)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(10, 10, 280, 130);
+
+      ctx.fillStyle = '#ef4444';
+      ctx.font = 'bold 14px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('ATTACK STATISTICS', 25, 35);
+
+      ctx.fillStyle = '#888888';
+      ctx.font = '12px monospace';
+      ctx.fillText(`Protocol: ${protocol}`, 25, 55);
+      ctx.fillText(`Target: ${selectedTarget ? blueTeamVMs.find(v => v.id === selectedTarget)?.ip : 'None'}:${targetPort}`, 25, 72);
+      ctx.fillText(`Packets Sent: ${statsRef.current.sent.toLocaleString()}`, 25, 89);
+      ctx.fillText(`Packets In-Flight: ${packetsRef.current.length}`, 25, 106);
+      ctx.fillText(`Active Sources: ${selectedSources.length}`, 25, 123);
+
+      // Status indicator
+      if (isAttacking) {
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(265, 28, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#ef4444';
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      // Legend
+      ctx.fillStyle = 'rgba(20, 0, 0, 0.9)';
+      ctx.fillRect(canvas.width - 200, 10, 190, 100);
+      ctx.strokeStyle = 'rgba(220, 38, 38, 0.5)';
+      ctx.strokeRect(canvas.width - 200, 10, 190, 100);
+
+      ctx.fillStyle = '#888888';
+      ctx.font = 'bold 12px monospace';
+      ctx.fillText('LEGEND', canvas.width - 185, 30);
+
+      ctx.font = '11px monospace';
+      // Red team indicator
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(canvas.width - 185, 42, 12, 12);
+      ctx.fillStyle = '#888888';
+      ctx.fillText('Red Team (Attacker)', canvas.width - 168, 52);
+
+      // Blue team indicator
+      ctx.fillStyle = '#3b82f6';
+      ctx.fillRect(canvas.width - 185, 60, 12, 12);
+      ctx.fillStyle = '#888888';
+      ctx.fillText('Blue Team (Target)', canvas.width - 168, 70);
+
+      // Packet indicator
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.arc(canvas.width - 179, 86, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#888888';
+      ctx.fillText('Attack Packet', canvas.width - 168, 90);
+
+      animationRef.current = requestAnimationFrame(animate);
+    };
+
+    // Reset stats when attack starts/stops
+    if (isAttacking) {
+      statsRef.current = { sent: 0, received: 0, dropped: 0 };
+    }
+
+    animationRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [
+    redTeamVMs,
+    blueTeamVMs,
+    selectedSources,
+    selectedTarget,
+    targetPort,
+    isAttacking,
+    attackType,
+    packetsPerSecond,
+    drawIsometricServer,
+    drawPacket,
+    drawConnectionLine
+  ]);
+
   return (
-    <div className="relative w-full h-[700px] rounded-2xl overflow-hidden" style={{ backgroundColor: COLORS.bg }}>
-      {/* 3D Canvas */}
-      <Canvas
-        camera={{ position: [8, 6, 8], fov: 50 }}
-        gl={{ antialias: true, alpha: false }}
-        style={{ background: COLORS.bg }}
-      >
-        <Scene
-          redTeamVMs={redTeamVMs}
-          blueTeamVMs={blueTeamVMs}
-          selectedSources={selectedSources}
-          selectedTarget={selectedTarget}
-          isAttacking={isAttacking}
-          onPacketReceived={handlePacketReceived}
-          packetsPerSecond={packetsPerSecond}
-        />
-      </Canvas>
-
-      {/* Modern UI Overlay - Stats Card */}
-      <div className="absolute top-4 left-4 p-4 rounded-xl backdrop-blur-md"
+    <div className="relative w-full bg-gray-950 rounded-lg border border-red-900/30 overflow-hidden">
+      <canvas
+        ref={canvasRef}
+        className="w-full h-auto"
         style={{
-          backgroundColor: 'rgba(18, 18, 26, 0.9)',
-          border: '1px solid rgba(255,255,255,0.1)'
-        }}>
-        <div className="flex items-center gap-2 mb-3">
-          <Activity className="w-4 h-4" style={{ color: COLORS.attackerSecondary }} />
-          <span className="text-sm font-semibold" style={{ color: COLORS.textPrimary }}>
-            Attack Statistics
-          </span>
-          {isAttacking && (
-            <span className="flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full opacity-75"
-                style={{ backgroundColor: COLORS.success }} />
-              <span className="relative inline-flex rounded-full h-2 w-2"
-                style={{ backgroundColor: COLORS.success }} />
-            </span>
-          )}
-        </div>
+          maxHeight: '700px',
+          imageRendering: 'crisp-edges'
+        }}
+      />
 
-        <div className="space-y-2 text-xs">
-          <div className="flex justify-between gap-8">
-            <span style={{ color: COLORS.textSecondary }}>Protocol</span>
-            <span className="font-mono font-medium" style={{ color: COLORS.textPrimary }}>
-              {getProtocol(attackType)}
-            </span>
-          </div>
-          <div className="flex justify-between gap-8">
-            <span style={{ color: COLORS.textSecondary }}>Target</span>
-            <span className="font-mono font-medium" style={{ color: COLORS.textPrimary }}>
-              {selectedTarget ? blueTeamVMs.find(v => v.id === selectedTarget)?.ip : 'None'}:{targetPort}
-            </span>
-          </div>
-          <div className="flex justify-between gap-8">
-            <span style={{ color: COLORS.textSecondary }}>Packets Sent</span>
-            <span className="font-mono font-bold" style={{ color: COLORS.attackerSecondary }}>
-              {displayStats.sent.toLocaleString()}
-            </span>
-          </div>
-          <div className="flex justify-between gap-8">
-            <span style={{ color: COLORS.textSecondary }}>Sources Active</span>
-            <span className="font-mono font-medium" style={{ color: COLORS.textPrimary }}>
-              {selectedSources.length}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Legend Card */}
-      <div className="absolute top-4 right-4 p-4 rounded-xl backdrop-blur-md"
-        style={{
-          backgroundColor: 'rgba(18, 18, 26, 0.9)',
-          border: '1px solid rgba(255,255,255,0.1)'
-        }}>
-        <span className="text-xs font-semibold mb-3 block" style={{ color: COLORS.textPrimary }}>
-          Legend
-        </span>
-        <div className="space-y-2 text-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: COLORS.attackerPrimary }} />
-            <span style={{ color: COLORS.textSecondary }}>Attacker</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded" style={{ backgroundColor: COLORS.targetPrimary }} />
-            <span style={{ color: COLORS.textSecondary }}>Target</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-2 rounded-sm" style={{ backgroundColor: COLORS.packet }} />
-            <span style={{ color: COLORS.textSecondary }}>Packet</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Attack Status Banner */}
+      {/* Attack status overlay */}
       {isAttacking && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full backdrop-blur-md flex items-center gap-3"
-          style={{
-            backgroundColor: 'rgba(220, 38, 38, 0.2)',
-            border: '1px solid rgba(239, 68, 68, 0.3)'
-          }}>
-          <Zap className="w-4 h-4" style={{ color: COLORS.attackerSecondary }} />
-          <span className="text-sm font-medium" style={{ color: COLORS.textPrimary }}>
-            {getProtocol(attackType)} Flood Active
-          </span>
-          <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: COLORS.attackerSecondary }} />
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-red-900/90 backdrop-blur-sm border border-red-500/50 rounded px-4 py-2">
+          <div className="flex items-center gap-3">
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+            <span className="text-red-400 font-mono text-sm font-bold">
+              ATTACK IN PROGRESS - {getProtocol(attackType)} FLOOD
+            </span>
+          </div>
         </div>
       )}
-
-      {/* Controls hint */}
-      <div className="absolute bottom-4 right-4 px-3 py-2 rounded-lg text-xs"
-        style={{
-          backgroundColor: 'rgba(18, 18, 26, 0.7)',
-          color: COLORS.textMuted
-        }}>
-        Drag to rotate • Scroll to zoom
-      </div>
     </div>
   );
 };

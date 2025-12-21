@@ -36,7 +36,7 @@ import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CyberAttackMap } from '@/components/CyberAttackMap';
-import { IsometricAttackMap, PacketStats } from '@/components/IsometricAttackMap';
+import { IsometricAttackMap } from '@/components/IsometricAttackMap';
 
 // ============================================================================
 // Types
@@ -141,26 +141,26 @@ const VMNodeCard: React.FC<{
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       className={`
-        relative p-4 rounded-2xl border cursor-pointer transition-all shadow-md hover:shadow-lg
-        ${isSelected ? 'border-blue-500/50 bg-blue-500/15 ring-2 ring-blue-500/30' : 'border-gray-700/50 bg-gray-800/40'}
-        ${isAttacking ? 'border-red-500/50 bg-red-500/20 animate-pulse ring-2 ring-red-500/30' : ''}
-        ${isTarget ? 'border-orange-500/50 bg-orange-500/20 ring-2 ring-orange-500/30' : ''}
+        relative p-3 rounded-lg border-2 cursor-pointer transition-all
+        ${isSelected ? 'border-blue-500 bg-blue-500/10' : 'border-gray-700 bg-gray-800/50'}
+        ${isAttacking ? 'border-red-500 bg-red-500/20 animate-pulse' : ''}
+        ${isTarget ? 'border-orange-500 bg-orange-500/20' : ''}
       `}
       onClick={onClick}
     >
-      <div className="flex items-center gap-3.5">
-        <div className={`p-2.5 rounded-xl ${getStatusColor()} shadow-sm`}>
+      <div className="flex items-center gap-3">
+        <div className={`p-2 rounded-full ${getStatusColor()}`}>
           {getStatusIcon()}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-sm text-white truncate leading-5">{vm.name}</p>
-          <p className="text-xs text-gray-400 mt-0.5">{vm.ip}</p>
+          <p className="font-medium text-sm text-white truncate">{vm.name}</p>
+          <p className="text-xs text-gray-400">{vm.ip}</p>
         </div>
         {isSelected && (
           <CheckCircle2 className="w-5 h-5 text-blue-500" />
         )}
       </div>
-      <Badge variant="outline" className="mt-3 text-xs px-2.5 py-1 rounded-full font-medium">
+      <Badge variant="outline" className="mt-2 text-xs">
         {vm.role}
       </Badge>
     </motion.div>
@@ -239,7 +239,7 @@ const LogViewer: React.FC<{ logs: AttackLog[] }> = ({ logs }) => {
   return (
     <div
       ref={logContainerRef}
-      className="bg-gray-950/80 rounded-2xl p-4 h-64 overflow-y-auto font-mono text-xs ring-1 ring-gray-800/50"
+      className="bg-gray-900 rounded-lg p-3 h-64 overflow-y-auto font-mono text-xs"
     >
       {logs.length === 0 ? (
         <p className="text-gray-500 text-center py-4">No attack logs yet...</p>
@@ -279,7 +279,6 @@ export default function DDoSDashboard() {
   const [attackLogs, setAttackLogs] = useState<AttackLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [apiConnected, setApiConnected] = useState(false);
-  const [packetStats, setPacketStats] = useState<PacketStats>({ sent: 0, received: 0 });
   const wsRef = useRef<WebSocket | null>(null);
 
   // Check API connection
@@ -512,37 +511,37 @@ export default function DDoSDashboard() {
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-white">
-        {/* Header - MD3 Surface with elevation-2 */}
-        <header className="border-b border-gray-800 bg-gray-900/95 backdrop-blur-xl sticky top-0 z-50 shadow-lg">
-          <div className="container mx-auto px-6 py-5">
+        {/* Header */}
+        <header className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-xl sticky top-0 z-50">
+          <div className="container mx-auto px-4 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-red-500/10 rounded-2xl ring-1 ring-red-500/20">
-                  <Zap className="w-7 h-7 text-red-500" />
+                <div className="p-2 bg-red-500/20 rounded-lg">
+                  <Zap className="w-8 h-8 text-red-500" />
                 </div>
                 <div>
-                  <h1 className="text-[28px] font-medium leading-9 tracking-tight bg-gradient-to-r from-red-400 to-orange-400 bg-clip-text text-transparent">
+                  <h1 className="text-2xl font-bold bg-gradient-to-r from-red-400 to-orange-400 bg-clip-text text-transparent">
                     DDoS Attack Simulator
                   </h1>
-                  <p className="text-sm font-normal leading-5 text-gray-400 mt-0.5">Cyber Range Training Environment</p>
+                  <p className="text-sm text-gray-400">Cyber Range Training Environment</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <Badge variant={apiConnected ? "default" : "destructive"} className="gap-2 px-3 py-1.5 rounded-full font-medium text-xs">
+              <div className="flex items-center gap-4">
+                <Badge variant={apiConnected ? "default" : "destructive"} className="gap-2">
                   {apiConnected ? (
                     <>
-                      <Wifi className="w-3.5 h-3.5" />
+                      <Wifi className="w-3 h-3" />
                       API Connected
                     </>
                   ) : (
                     <>
-                      <WifiOff className="w-3.5 h-3.5" />
+                      <WifiOff className="w-3 h-3" />
                       API Disconnected
                     </>
                   )}
                 </Badge>
-                <Button variant="outline" size="sm" onClick={fetchVMStatuses} className="rounded-full px-4 font-medium">
+                <Button variant="outline" size="sm" onClick={fetchVMStatuses}>
                   <RefreshCw className="w-4 h-4 mr-2" />
                   Refresh Status
                 </Button>
@@ -551,14 +550,14 @@ export default function DDoSDashboard() {
           </div>
         </header>
 
-        {/* Main Content - MD3 Surface-1 */}
-        <main className="container mx-auto px-6 py-8">
+        {/* Main Content */}
+        <main className="container mx-auto px-4 py-6">
           <Tabs defaultValue="topology" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4 lg:w-auto bg-gray-800/50 p-1 rounded-full">
-              <TabsTrigger value="topology" className="rounded-full data-[state=active]:bg-gray-900 data-[state=active]:shadow-md transition-all">Network Topology</TabsTrigger>
-              <TabsTrigger value="network-map" className="rounded-full data-[state=active]:bg-gray-900 data-[state=active]:shadow-md transition-all">Network Map</TabsTrigger>
-              <TabsTrigger value="visualization" className="rounded-full data-[state=active]:bg-gray-900 data-[state=active]:shadow-md transition-all">Cyber View</TabsTrigger>
-              <TabsTrigger value="analytics" className="rounded-full data-[state=active]:bg-gray-900 data-[state=active]:shadow-md transition-all">Analytics</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-4 lg:w-auto">
+              <TabsTrigger value="topology">Network Topology</TabsTrigger>
+              <TabsTrigger value="network-map">Network Map</TabsTrigger>
+              <TabsTrigger value="visualization">Cyber View</TabsTrigger>
+              <TabsTrigger value="analytics">Analytics</TabsTrigger>
             </TabsList>
 
             {/* Topology Tab */}
@@ -568,16 +567,14 @@ export default function DDoSDashboard() {
                 {/* Left Column - VM Selection */}
                 <div className="lg:col-span-2 space-y-6">
 
-                  {/* Network Topology Card - MD3 Elevation-1 */}
-                  <Card className="bg-gray-900/60 border-gray-800/50 rounded-3xl shadow-xl">
-                    <CardHeader className="pb-4">
-                      <CardTitle className="flex items-center gap-3 text-xl font-medium">
-                        <div className="p-2 bg-blue-500/10 rounded-xl">
-                          <Network className="w-5 h-5 text-blue-500" />
-                        </div>
+                  {/* Network Topology Card */}
+                  <Card className="bg-gray-900/50 border-gray-800">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Network className="w-5 h-5 text-blue-500" />
                         Network Topology
                       </CardTitle>
-                      <CardDescription className="text-sm font-normal leading-5 text-gray-400 mt-2">
+                      <CardDescription>
                         Select source VMs and target for the attack
                       </CardDescription>
                     </CardHeader>
@@ -594,11 +591,11 @@ export default function DDoSDashboard() {
 
                         {/* Red Team VMs */}
                         <div className="space-y-3">
-                          <div className="flex items-center gap-3 mb-4">
-                            <div className="p-2 bg-red-500/10 rounded-xl ring-1 ring-red-500/20">
+                          <div className="flex items-center gap-2 mb-4">
+                            <div className="p-1.5 bg-red-500/20 rounded">
                               <Cpu className="w-4 h-4 text-red-500" />
                             </div>
-                            <h3 className="text-base font-medium text-red-400">Red Team (Attackers)</h3>
+                            <h3 className="font-semibold text-red-400">Red Team (Attackers)</h3>
                           </div>
                           <div className="space-y-2">
                             {redTeamVMs.map((vm) => (
@@ -626,11 +623,11 @@ export default function DDoSDashboard() {
 
                         {/* Blue Team VMs */}
                         <div className="space-y-3">
-                          <div className="flex items-center gap-3 mb-4">
-                            <div className="p-2 bg-blue-500/10 rounded-xl ring-1 ring-blue-500/20">
+                          <div className="flex items-center gap-2 mb-4">
+                            <div className="p-1.5 bg-blue-500/20 rounded">
                               <Shield className="w-4 h-4 text-blue-500" />
                             </div>
-                            <h3 className="text-base font-medium text-blue-400">Blue Team (Targets)</h3>
+                            <h3 className="font-semibold text-blue-400">Blue Team (Targets)</h3>
                           </div>
                           <div className="space-y-2">
                             {blueTeamVMs.map((vm) => (
@@ -649,13 +646,11 @@ export default function DDoSDashboard() {
                     </CardContent>
                   </Card>
 
-                  {/* Attack Logs - MD3 Elevation-1 */}
-                  <Card className="bg-gray-900/60 border-gray-800/50 rounded-3xl shadow-xl">
+                  {/* Attack Logs */}
+                  <Card className="bg-gray-900/50 border-gray-800">
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-3 text-xl font-medium">
-                        <div className="p-2 bg-green-500/10 rounded-xl">
-                          <Terminal className="w-5 h-5 text-green-500" />
-                        </div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Terminal className="w-5 h-5 text-green-500" />
                         Attack Logs
                       </CardTitle>
                     </CardHeader>
@@ -668,21 +663,19 @@ export default function DDoSDashboard() {
                 {/* Right Column - Attack Configuration */}
                 <div className="space-y-6">
 
-                  {/* Attack Configuration Card - MD3 Elevation-2 */}
-                  <Card className="bg-gray-900/70 border-gray-800/50 rounded-3xl shadow-2xl">
+                  {/* Attack Configuration Card */}
+                  <Card className="bg-gray-900/50 border-gray-800">
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-3 text-xl font-medium">
-                        <div className="p-2 bg-purple-500/10 rounded-xl">
-                          <Settings className="w-5 h-5 text-purple-500" />
-                        </div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Settings className="w-5 h-5 text-purple-500" />
                         Attack Configuration
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-5">
+                    <CardContent className="space-y-4">
 
                       {/* Attack Type */}
-                      <div className="space-y-2.5">
-                        <Label className="text-sm font-medium text-gray-300">Attack Type</Label>
+                      <div className="space-y-2">
+                        <Label>Attack Type</Label>
                         <Select
                           value={attackConfig.attackType}
                           onValueChange={(value) => setAttackConfig({ ...attackConfig, attackType: value })}
@@ -710,8 +703,8 @@ export default function DDoSDashboard() {
                       </div>
 
                       {/* Target Port */}
-                      <div className="space-y-2.5">
-                        <Label className="text-sm font-medium text-gray-300">Target Port</Label>
+                      <div className="space-y-2">
+                        <Label>Target Port</Label>
                         <Select
                           value={attackConfig.targetPort.toString()}
                           onValueChange={(value) => setAttackConfig({ ...attackConfig, targetPort: parseInt(value) })}
@@ -730,8 +723,8 @@ export default function DDoSDashboard() {
                       </div>
 
                       {/* Duration */}
-                      <div className="space-y-2.5">
-                        <Label className="text-sm font-medium text-gray-300">Duration (seconds)</Label>
+                      <div className="space-y-2">
+                        <Label>Duration (seconds)</Label>
                         <Input
                           type="number"
                           min={10}
@@ -743,8 +736,8 @@ export default function DDoSDashboard() {
 
                       {/* Workers (for HTTP floods) */}
                       {['http_flood', 'hulk'].includes(attackConfig.attackType) && (
-                        <div className="space-y-2.5">
-                          <Label className="text-sm font-medium text-gray-300">Workers</Label>
+                        <div className="space-y-2">
+                          <Label>Workers</Label>
                           <Input
                             type="number"
                             min={1}
@@ -757,8 +750,8 @@ export default function DDoSDashboard() {
 
                       {/* Sockets */}
                       {['http_flood', 'slowloris'].includes(attackConfig.attackType) && (
-                        <div className="space-y-2.5">
-                          <Label className="text-sm font-medium text-gray-300">Sockets</Label>
+                        <div className="space-y-2">
+                          <Label>Sockets</Label>
                           <Input
                             type="number"
                             min={10}
@@ -785,12 +778,12 @@ export default function DDoSDashboard() {
                         </div>
                       </div>
 
-                      {/* Action Buttons - MD3 Filled Buttons */}
+                      {/* Action Buttons */}
                       <div className="pt-4 space-y-3">
                         {activeAttack?.status === 'running' ? (
                           <Button
                             variant="destructive"
-                            className="w-full h-12 rounded-full font-medium text-base shadow-lg hover:shadow-xl transition-shadow"
+                            className="w-full"
                             onClick={stopAttack}
                           >
                             <Square className="w-4 h-4 mr-2" />
@@ -798,7 +791,7 @@ export default function DDoSDashboard() {
                           </Button>
                         ) : (
                           <Button
-                            className="w-full h-12 bg-red-600 hover:bg-red-700 rounded-full font-medium text-base shadow-lg hover:shadow-xl transition-shadow"
+                            className="w-full bg-red-600 hover:bg-red-700"
                             onClick={executeAttack}
                             disabled={!apiConnected || isLoading || selectedSources.length === 0 || !selectedTarget}
                           >
@@ -819,14 +812,12 @@ export default function DDoSDashboard() {
                     </CardContent>
                   </Card>
 
-                  {/* Active Attack Status - MD3 Elevation-1 */}
+                  {/* Active Attack Status */}
                   {activeAttack && (
-                    <Card className="bg-gray-900/60 border-gray-800/50 rounded-3xl shadow-xl">
+                    <Card className="bg-gray-900/50 border-gray-800">
                       <CardHeader>
-                        <CardTitle className="flex items-center gap-3 text-xl font-medium">
-                          <div className="p-2 bg-yellow-500/10 rounded-xl">
-                            <Activity className="w-5 h-5 text-yellow-500" />
-                          </div>
+                        <CardTitle className="flex items-center gap-2">
+                          <Activity className="w-5 h-5 text-yellow-500" />
                           Active Attack
                         </CardTitle>
                       </CardHeader>
@@ -867,17 +858,15 @@ export default function DDoSDashboard() {
                     </Card>
                   )}
 
-                  {/* Quick Tips - MD3 Surface Variant */}
-                  <Card className="bg-gray-900/40 border-gray-800/30 rounded-2xl">
+                  {/* Quick Tips */}
+                  <Card className="bg-gray-900/50 border-gray-800">
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2.5 text-base font-medium">
-                        <div className="p-1.5 bg-yellow-500/10 rounded-lg">
-                          <AlertTriangle className="w-4 h-4 text-yellow-500" />
-                        </div>
+                      <CardTitle className="flex items-center gap-2 text-sm">
+                        <AlertTriangle className="w-4 h-4 text-yellow-500" />
                         Quick Tips
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="text-sm text-gray-400 space-y-2 leading-relaxed">
+                    <CardContent className="text-xs text-gray-400 space-y-2">
                       <p>• Select multiple source VMs for distributed attacks</p>
                       <p>• SYN/UDP floods require sudo on VMs</p>
                       <p>• HTTP flood (GoldenEye) is most effective against web apps</p>
@@ -900,20 +889,16 @@ export default function DDoSDashboard() {
                 isAttacking={activeAttack?.status === 'running'}
                 attackType={attackConfig.attackType}
                 packetsPerSecond={100}
-                initialStats={packetStats}
-                onStatsUpdate={setPacketStats}
               />
 
-              {/* Attack Logs below network map - MD3 Elevation-1 */}
-              <Card className="bg-gray-900/60 border-gray-800/50 rounded-3xl shadow-xl">
+              {/* Attack Logs below network map */}
+              <Card className="bg-gray-900/50 border-gray-800">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-3 text-xl font-medium">
-                    <div className="p-2 bg-green-500/10 rounded-xl">
-                      <Terminal className="w-5 h-5 text-green-500" />
-                    </div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Terminal className="w-5 h-5 text-green-500" />
                     Real-time Attack Logs
                   </CardTitle>
-                  <CardDescription className="text-sm font-normal leading-5 text-gray-400 mt-2">
+                  <CardDescription>
                     Live stream of attack execution and packet flow
                   </CardDescription>
                 </CardHeader>
@@ -934,13 +919,11 @@ export default function DDoSDashboard() {
                 attackLogs={attackLogs}
               />
 
-              {/* Attack Logs below visualization - MD3 Elevation-1 */}
-              <Card className="bg-gray-900/60 border-gray-800/50 rounded-3xl shadow-xl">
+              {/* Attack Logs below visualization */}
+              <Card className="bg-gray-900/50 border-gray-800">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-3 text-xl font-medium">
-                    <div className="p-2 bg-green-500/10 rounded-xl">
-                      <Terminal className="w-5 h-5 text-green-500" />
-                    </div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Terminal className="w-5 h-5 text-green-500" />
                     Live Attack Logs
                   </CardTitle>
                 </CardHeader>
@@ -953,13 +936,11 @@ export default function DDoSDashboard() {
             {/* Analytics Tab */}
             <TabsContent value="analytics" className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Attack Statistics - MD3 Elevation-1 */}
-                <Card className="bg-gray-900/60 border-gray-800/50 rounded-3xl shadow-xl">
+                {/* Attack Statistics */}
+                <Card className="bg-gray-900/50 border-gray-800">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-3 text-xl font-medium">
-                      <div className="p-2 bg-purple-500/10 rounded-xl">
-                        <BarChart3 className="w-5 h-5 text-purple-500" />
-                      </div>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-purple-500" />
                       Attack Statistics
                     </CardTitle>
                   </CardHeader>
@@ -991,13 +972,11 @@ export default function DDoSDashboard() {
                   </CardContent>
                 </Card>
 
-                {/* VM Status Summary - MD3 Elevation-1 */}
-                <Card className="bg-gray-900/60 border-gray-800/50 rounded-3xl shadow-xl">
+                {/* VM Status Summary */}
+                <Card className="bg-gray-900/50 border-gray-800">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-3 text-xl font-medium">
-                      <div className="p-2 bg-blue-500/10 rounded-xl">
-                        <Server className="w-5 h-5 text-blue-500" />
-                      </div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Server className="w-5 h-5 text-blue-500" />
                       VM Status
                     </CardTitle>
                   </CardHeader>
@@ -1029,13 +1008,11 @@ export default function DDoSDashboard() {
                   </CardContent>
                 </Card>
 
-                {/* Attack Configuration Summary - MD3 Elevation-1 */}
-                <Card className="bg-gray-900/60 border-gray-800/50 rounded-3xl shadow-xl">
+                {/* Attack Configuration Summary */}
+                <Card className="bg-gray-900/50 border-gray-800">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-3 text-xl font-medium">
-                      <div className="p-2 bg-orange-500/10 rounded-xl">
-                        <Settings className="w-5 h-5 text-orange-500" />
-                      </div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Settings className="w-5 h-5 text-orange-500" />
                       Configuration
                     </CardTitle>
                   </CardHeader>
@@ -1066,13 +1043,11 @@ export default function DDoSDashboard() {
                 </Card>
               </div>
 
-              {/* Recent Logs - MD3 Elevation-1 */}
-              <Card className="bg-gray-900/60 border-gray-800/50 rounded-3xl shadow-xl">
+              {/* Recent Logs */}
+              <Card className="bg-gray-900/50 border-gray-800">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-3 text-xl font-medium">
-                    <div className="p-2 bg-green-500/10 rounded-xl">
-                      <Activity className="w-5 h-5 text-green-500" />
-                    </div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="w-5 h-5 text-green-500" />
                     Recent Activity
                   </CardTitle>
                 </CardHeader>
