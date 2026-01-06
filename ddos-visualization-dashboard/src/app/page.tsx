@@ -99,9 +99,10 @@ const RED_TEAM_VMS: VMNode[] = [
 ];
 
 const BLUE_TEAM_VMS: VMNode[] = [
-  { id: 'team1', name: 'Blue Team 1', ip: '20.10.40.11', role: 'Target Infrastructure', status: 'offline', x: 700, y: 200 },
-  { id: 'team2', name: 'Blue Team 2', ip: '20.10.50.13', role: 'Target Infrastructure', status: 'offline', x: 700, y: 350 },
-  { id: 'team3', name: 'Blue Team 3', ip: '20.10.60.11', role: 'Target Infrastructure', status: 'offline', x: 700, y: 500 },
+  // { id: 'team1', name: 'Blue Team 1', ip: '20.10.40.11', role: 'Target Infrastructure', status: 'offline', x: 700, y: 200 },  // Hidden - not using OPNsense LAN routing
+  { id: 'team2', name: 'Blue Team 2', ip: '192.168.50.11', role: 'Target Infrastructure', status: 'offline', x: 700, y: 200 },
+  // { id: 'team3', name: 'Blue Team 3', ip: '20.10.60.11', role: 'Target Infrastructure', status: 'offline', x: 700, y: 500 },  // Hidden - not using OPNsense LAN routing
+  { id: 'bank', name: 'Vulnerable Bank Website', ip: '192.168.50.101', role: 'Primary DDoS Target', status: 'offline', x: 700, y: 350 },
 ];
 
 const ATTACK_TYPES = [
