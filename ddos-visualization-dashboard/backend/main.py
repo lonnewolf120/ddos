@@ -59,9 +59,27 @@ RED_TEAM_VMS = {
 
 # Blue Team Targets Configuration
 BLUE_TEAM_TARGETS = {
-    "team1": {"ip": "20.10.40.11", "name": "Blue Team 1", "ports": [9080, 9090, 3000]},
-    "team2": {"ip": "20.10.50.13", "name": "Blue Team 2", "ports": [9080, 9090, 3000]},
-    "team3": {"ip": "20.10.60.11", "name": "Blue Team 3", "ports": [9080, 9090, 3000]},
+    # COMMENTED OUT - Team 1 and Team 3 (Hidden)
+    # "team1": {"ip": "20.10.40.11", "lan_ip": "192.168.40.11", "wan_ip": "10.72.200.51", "name": "Blue Team 1", "ports": [9080, 9090, 3000]},
+    # "team3": {"ip": "20.10.60.11", "lan_ip": "192.168.60.11", "wan_ip": "10.72.200.57", "name": "Blue Team 3", "ports": [9080, 9090, 3000]},
+
+    # PRIMARY TARGETS - Blue Team 2
+    "team2": {
+        "ip": "192.168.50.11",
+        "lan_ip": "192.168.50.11",
+        "wan_ip": "10.72.200.54",
+        "name": "Blue Team 2 - Web Apps",
+        "ports": [9080, 9090, 3000],
+        "primary": True,
+    },
+    "bank": {
+        "ip": "192.168.50.101",
+        "lan_ip": "192.168.50.101",
+        "wan_ip": "10.72.200.101",
+        "name": "Vulnerable Bank Website",
+        "ports": [3000],
+        "primary": True,
+    },
 }
 
 # Attack Tools Configuration

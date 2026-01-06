@@ -1,0 +1,7 @@
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at http://10.72.200.22:8841/api/health. (Reason: CORS request did not succeed). Status code: (null).
+API connection failed: TypeError: NetworkError when attempting to fetch resource. node_modules_next_dist_f3530cac._.js:3128:32
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at http://10.72.200.22:8841/api/vms/red-team. (Reason: CORS request did not succeed). Status code: (null).
+Failed to fetch VM statuses: TypeError: NetworkError when attempting to fetch resource. node_modules_next_dist_f3530cac._.js:3128:32
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at http://10.72.200.22:8841/api/vms/blue-team. (Reason: CORS request did not succeed). Status code: (null).
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at http://10.72.200.22:8841/api/spoofing/ranges. (Reason: CORS request did not succeed). Status code: (null).
+Failed to fetch common IP ranges: TypeError: NetworkError when attempting to fetch resource. node_modules_next_dist_f3530cac._.js:3128:32
