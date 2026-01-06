@@ -1,5 +1,5 @@
 # IP to attack
-dst_ip = "10.72.200.51"
+dst_ip = "192.168.50.11"
 # Number of IPs
 n_ips = "100"
 # Number of messages per IP

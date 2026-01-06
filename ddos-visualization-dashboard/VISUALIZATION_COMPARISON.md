@@ -87,7 +87,7 @@ The DDoS Visualization Dashboard now offers **4 distinct visualization tabs**, e
 
 ---
 
-## 3️⃣ Cyber View Tab (Original)
+## 3️⃣ Attack Flow Tab (Original)
 
 **Purpose**: Abstract particle-based visualization
 
@@ -162,7 +162,7 @@ The DDoS Visualization Dashboard now offers **4 distinct visualization tabs**, e
 - Record for presentations
 
 ### During Attack (Monitoring)
-✅ **Network Topology Tab** or **Cyber View Tab**
+✅ **Network Topology Tab** or **Attack Flow Tab**
 - Watch logs in real-time
 - Monitor attack status
 - Quick visual feedback
@@ -178,7 +178,7 @@ The DDoS Visualization Dashboard now offers **4 distinct visualization tabs**, e
 
 ## 📊 Feature Comparison Matrix
 
-| Feature | Network Topology | Network Map ⭐ | Cyber View | Analytics |
+| Feature | Network Topology | Network Map ⭐ | Attack Flow | Analytics |
 |---------|-----------------|---------------|------------|-----------|
 | **VM Selection** | ✅ Interactive | ❌ Display only | ❌ Display only | ❌ Not shown |
 | **Attack Config** | ✅ Full panel | ❌ Not shown | ❌ Not shown | ✅ Summary only |
@@ -212,7 +212,7 @@ Style: Canvas-based animation
 Animation: Advanced particle system
 ```
 
-### Cyber View (Abstract View)
+### Attack Flow (Abstract View)
 ```
 Simplified, conceptual representation
 Focus: Quick visual feedback
@@ -245,7 +245,7 @@ Animation: None
 
 ### For Testing
 1. **Network Topology** (quick setup)
-2. **Cyber View** or **Network Topology** (monitor logs)
+2. **Attack Flow** or **Network Topology** (monitor logs)
 3. **Analytics** (check results)
 
 ### For Screenshots/Recording

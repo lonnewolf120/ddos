@@ -132,7 +132,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8841
 | Team ID | Name | IP | Services |
 |---------|------|-----|----------|
 | team1 | Blue Team 1 | 10.72.200.51 | DVWA:9080, bWAPP:9090, Juice:3000 |
-| team2 | Blue Team 2 | 10.72.200.54 | DVWA:9080, bWAPP:9090, Juice:3000 |
+| team2 | Blue Team 2 | 20.10.50.13 | DVWA:9080, bWAPP:9090, Juice:3000 |
 | team3 | Blue Team 3 | 10.72.200.57 | DVWA:9080, bWAPP:9090, Juice:3000 |
 
 ## ⚔️ Attack Types

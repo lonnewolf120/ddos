@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  local_rules_attacks.xml
+
+  Wazuh local rules for common web app attacks used in the Cyber Range exercises:
+  - SQL Injection
+  - Cross Site Scripting (XSS)
+  - Command Injection
+  - Brute-force web login attempts
+  - Active scanning / fuzzing (ZAP, Burp)
+
+  Usage:
+  1. Copy this file to the Wazuh Manager at /var/ossec/etc/rules/local_rules.xml (or append its contents).
+  2. Restart the Wazuh Manager: sudo systemctl restart wazuh-manager
+  3. Optionally copy to an agent to run locally and restart the agent: sudo systemctl restart wazuh-agent
+
+  Notes:
+  - Tailor rule ids, levels, and regexes to your environment.
+  - These rules use generic regex matches and may need tuning to reduce false positives.
+-->
+
+<ruleset>
+  <group name="cyberrange.attacks">
+
+    <!-- SQL Injection: common tokens/patterns -->
+    <rule id="120001" level="10">
+      <match>(?i)(\bUNION\b.*\bSELECT\b|'\s*or\s*'1'='1|"\s*or\s*"1"="1|--\s*$|/\*.*\*/|\bsleep\s*\(|\bbenchmark\s*\(|\bconcat\s*\()</match>
+      <description>SQL injection attempt detected (common payload tokens)</description>
+      <group>web,attack,sqli</group>
+      <mitre>
+        <id>T1190</id>
+      </mitre>
+    </rule>
+
+    <!-- SQL payloads from provided list -->
+    <rule id="120002" level="12">
+      <match>(?i)(' OR '1'='1|admin' OR '1'='1|UNION\s+SELECT\s+NULL|UNION\s+SELECT)</match>
+      <description>SQL injection (test payload from lab list)</description>
+      <group>web,attack,sqli</group>
+    </rule>
+
+    <!-- Cross-Site Scripting (XSS) -->
+    <rule id="120010" level="9">
+      <match>(?i)(&lt;script\b|javascript:|onerror\s*=|onload\s*=|&lt;img\s+[^&gt;]*src=|&lt;svg\b|&lt;iframe\b)</match>
+      <description>Possible Cross-Site Scripting (XSS) payload detected</description>
+      <group>web,attack,xss</group>
+      <mitre>
+        <id>T1059</id>
+      </mitre>
+    </rule>
+
+    <!-- Command Injection: shell metacharacters and typical payloads -->
+    <rule id="120020" level="12">
+      <match>(;|\|\||&amp;&amp;|`|\$\(.*\)|\|\s*cat\s+/etc/passwd|;\s*id|;\s*ls\s|-c\s+".*(whoami|id)"|\buname\s+-a\b)</match>
+      <description>Command injection attempt detected (shell metacharacters)</description>
+      <group>web,attack,cmdinj</group>
+    </rule>
+
+    <rule id="120021" level="12">
+      <match>(?i)(127\.0\.0\.1;\s*ls\s+-la|127\.0\.0\.1\s*&amp;&amp;\s*whoami|\|\s*cat\s+/etc/passwd|`id`|\$\(id\))</match>
+      <description>Command injection payload (from Burp Repeater tests)</description>
+      <group>web,attack,cmdinj</group>
+    </rule>
+
+    <!-- Brute force: repeated failed logins -->
+    <rule id="120030" level="11">
+      <match>(?i)(login failed|invalid credentials|authentication failed|incorrect password|failed login)</match>
+      <description>Possible login brute force (multiple failed logins from same source)</description>
+      <group>web,attack,bruteforce</group>
+      <frequency>5</frequency>
+      <timeframe>60</timeframe>
+    </rule>
+
+    <!-- Active scanning / fuzzing: high request rate from single IP -->
+    <rule id="120040" level="10">
+      <match>(GET|POST)</match>
+      <description>Possible active scanner / fuzzing (high request rate from single IP)</description>
+      <group>web,attack,scanner</group>
+      <frequency>20</frequency>
+      <timeframe>60</timeframe>
+    </rule>
+
+    <!-- Scanning tool user-agent detection (ZAP / Burp) -->
+    <rule id="120050" level="6">
+      <match>(?i)(OWASP ZAP|ZAP_2|ZAP-Commercial|BurpSuite|Burp/|burpsuite)</match>
+      <description>Scanning tool User-Agent detected (ZAP / Burp)</description>
+      <group>web,scanner,tools</group>
+    </rule>
+
+    <!-- Specific targeted endpoints used in the exercises (bWAPP / bWAPP login / file upload / XXE) -->
+    <rule id="120060" level="11">
+      <match>(?i)(/vulnerabilities/exec|/vulnerabilities/sqli|/vulnerabilities/upload|/vulnerabilities/xss_r/|/bWAPP/|/bWAPP/login\.php)</match>
+      <description>Request to known vulnerable app endpoints (bWAPP) — targeted in exercises</description>
+      <group>web,app,known_vuln</group>
+      <!-- tuned for lab activity (lower frequency threshold over a longer window to reduce noisy false positives) -->
+      <frequency>5</frequency>
+      <timeframe>120</timeframe>
+    </rule>
+
+    <!-- Target host specific detection (exercise target: 10.72.200.54) -->
+    <rule id="120062" level="11">
+      <match>(?i)(10\.72\.200\.54(:\d+)?/?.*(/vulnerabilities/exec|/vulnerabilities/sqli|/vulnerabilities/upload|/vulnerabilities/xss_r/|/bWAPP/|/bWAPP/login\.php))</match>
+      <description>Request to exercise target host 10.72.200.54 for known vulnerable endpoints</description>
+      <group>web,app,targeted</group>
+      <frequency>5</frequency>
+      <timeframe>120</timeframe>
+    </rule>
+
+    <!-- File Upload suspicious filenames / content -->
+    <rule id="120070" level="11">
+      <match>(?i)(filename=.*\.(php|phtml|php5)\b|filename=.*\.(php\.jpg|php%00|jpg\.php)|Content-Disposition:.*filename=.*\.(php|phtml)|Content-Type:\s*(application/x-php|application/php)|&lt;\?php|system\(|exec\(|passthru\()</match>
+      <description>Suspicious file upload attempt (php payload / filename bypass)</description>
+      <group>web,attack,fileupload</group>
+    </rule>
+
+    <rule id="120071" level="12">
+      <match>(?i)(filename=.*\.(php\.jpg|jpg\.php|php%00)|filename=.*\.(php\;|php%3B))</match>
+      <description>Possible file upload bypass attempt (double extension / null byte / encoded separators)</description>
+      <group>web,attack,fileupload</group>
+    </rule>
+
+    <!-- XXE / SSRF detection -->
+    <rule id="120080" level="12">
+      <match>(?i)(&lt;!DOCTYPE\s+[^&gt;]*\[|&lt;!ENTITY\s+[^&gt;]*SYSTEM\s+|SYSTEM\s+"file:/{3}|&lt;!ENTITY\s+%|&amp;\w+;)</match>
+      <description>Possible XXE payload / external entity declaration detected</description>
+      <group>web,attack,xxe</group>
+    </rule>
+
+    <rule id="120081" level="12">
+      <match>(?i)(http://169\.254\.169\.254|http://localhost(:\d+)?|http://127\.0\.0\.1|http://169\.254|file:///etc/passwd)</match>
+      <description>Potential SSRF / XXE exfiltration target (metadata service or local file access)</description>
+      <group>web,attack,ssrf,xxe</group>
+    </rule>
+
+    <!-- Network scanning / reconnaissance detection -->
+    <rule id="120090" level="9">
+      <match>(?i)(Nmap scan report|Nmap Scripting Engine|Nmap/|masscan)</match>
+      <description>Network reconnaissance tool detected in logs (Nmap / masscan)</description>
+      <group>network,scanner,recon</group>
+    </rule>
+
+    <rule id="120091" level="10">
+      <match>(?i)(connection refused|connect\(\) to .*port|SYN|connection timed out|icmp type 3 code 13)</match>
+      <description>Possible port scanning activity (many connection attempts across ports)</description>
+      <group>network,scanner,recon</group>
+      <frequency>50</frequency>
+      <timeframe>60</timeframe>
+    </rule>
+
+  </group>
+</ruleset>

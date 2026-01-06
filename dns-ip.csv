@@ -1,31 +1,35 @@
-Domain Name,WAN IP,app ,remarks,port (for dev only),IP,VM numbering
-blueteam.cyberrange.local,10.72.200.60,gui,blue gui ,3000,20.10.30.11,VM 0
-attackdrill.blueteam1.local,10.72.200.51,teler,Blue Team 1,9091,20.10.40.11/24,VM 1
-VULN1.blueteam1.local,10.72.200.51,bwapp,Blue Team 1,9080,20.10.40.11/24,VM 1
-VULN2.blueteam1.local,10.72.200.51,dvwa,Blue Team 1,9090,20.10.40.11/24,VM 1
-VULN3.blueteam1.local,10.72.200.51,owasp-juiceshop,Blue Team 1,3000,20.10.40.11/24,VM 1
-siem.blueteam1.local,10.72.200.52,wazuh,Blue Team 1,5601,20.10.40.12/24,VM 2
-idps.blueteam1.local/,10.72.200.53,evebox,Blue Team 1,5636,20.10.40.13/24,VM 3
-attackdrill.blueteam2.local,10.72.200.54,teler,Blue Team 2,9091,20.10.50.11/24,VM 4
-VULN1.blueteam2.local,10.72.200.54,bwapp,Blue Team 2,9080,20.10.50.11/24,VM 4
-VULN2.blueteam2.local,10.72.200.54,dvwa,Blue Team 2,9090,20.10.50.11/24,VM 4
-VULN3.blueteam2.local,10.72.200.54,owasp-juiceshop,Blue Team 2,3000,20.10.50.11/24,VM 4
-siem.blueteam2.local,10.72.200.55,wazuh,Blue Team 2,5601,20.10.50.12/24,VM 5
-idps.blueteam2.local/,10.72.200.56,evebox,Blue Team 2,5636,20.10.50.13/24,VM 6
-attackdrill.blueteam3.local,10.72.200.57,teler,Blue Team 3,9091,20.10.60.11/24,VM 7
-VULN1.blueteam3.local,10.72.200.57,bwapp,Blue Team 3,9080,20.10.60.11/24,VM 7
-VULN2.blueteam3.local,10.72.200.57,dvwa,Blue Team 3,9090,20.10.60.11/24,VM 7
-VULN3.blueteam3.local,10.72.200.57,owasp-juiceshop,Blue Team 3,3000,20.10.60.11/24,VM 7
-siem.blueteam3.local,10.72.200.58,wazuh,Blue Team 3,5601,20.10.60.12/24,VM 8
-idps.blueteam3.local/,10.72.200.59,evebox,Blue Team 3,5636,20.10.60.13/24,VM 9
-scheduler.cyberrange.local,10.72.200.61,scheduler api,Red Team,8002,10.10.30.30,VM10
-redteam.cyberrange.local,10.72.200.63,red team GUI,Red Team,3000,10.10.30.40,VM11
-console.cyberrange.local,10.72.200.62,attack generator,Red Team,3002,10.10.30.50,VM12
-attacker.cyberrange.local,10.72.200.64,,,,10.10.30.60,VM13
-botnet.cyberrange.local,10.72.200.65,,,,10.10.30.60,VM14
-api.cyberrange.local,10.72.200.71,backend api,Green Team,8001,10.10.10.30,VM15
-iam.cyberrange.local,10.72.200.73,keycloak IAM,Green Team,9000,10.10.10.40,VM16
-mas.cyberrange.local,10.72.200.74,prometheus,Green Team,,10.10.10.50,VM17
-aiv.cyberrange.local,10.72.200.74,grafana,Green Team,3000,10.10.10.50,VM18
-greenteam.cyberrange.local,10.72.200.75,Green team GUI,Green Team,3000,10.10.10.70,VM19
-whiteteam.cyberrange.local,10.72.200.50,white team GUI,white team,3000,10.10.20.30,VM20
+Domain Name,WAN IP,app ,remarks,port (for dev only),IP,VM numbering,OPNsense LAN IP
+blueteam.cyberrange.local,10.72.200.60,gui,blue gui ,3000,20.10.30.11,VM 0,
+attackdrill.blueteam1.local (blue-01),10.72.200.51,teler,Blue Team 1,9091,20.10.40.11/24,VM 1,
+VULN1.blueteam1.local,10.72.200.51,bwapp,Blue Team 1,9090,20.10.40.11/24,VM 1,
+VULN2.blueteam1.local,10.72.200.51,dvwa,Blue Team 1,9080,20.10.40.11/24,VM 1,
+VULN3.blueteam1.local,10.72.200.51,owasp-juiceshop,Blue Team 1,3000,20.10.40.11/24,VM 1,
+siem.blueteam1.local,10.72.200.52,wazuh,Blue Team 1,5601,20.10.40.12/24,VM 2,
+idps.blueteam1.local/,10.72.200.53,evebox,Blue Team 1,5636,20.10.40.13/24,VM 3,
+attackdrill.blueteam2.local (blue-04),10.72.200.54,teler,Blue Team 2,9091,20.10.50.11/24,VM 4,192.168.50.11
+VULN1.blueteam2.local,10.72.200.54,bwapp,Blue Team 2,9090,20.10.50.11/24,VM 4,
+VULN2.blueteam2.local,10.72.200.54,dvwa,Blue Team 2,9080,20.10.50.11/24,VM 4,
+VULN3.blueteam2.local,10.72.200.54,owasp-juiceshop,Blue Team 2,3000,20.10.50.11/24,VM 4,
+siem.blueteam2.local,10.72.200.55,wazuh,Blue Team 2,5601,20.10.50.12/24,VM 5,
+idps.blueteam2.local/,10.72.200.56,evebox,Blue Team 2,5636,20.10.50.13/24,VM 6,
+ransomtest1.local (Test folder: E:\),10.72.200.81,windows,Blue Team 2,,20.10.50.81/24,VM 1,192.168.50.81
+ubnt-server-01,10.72.200.101,ubuntu server,,,,VM23,192.168.50.101
+bank.cyberrange.local,10.72.200.101,Vulnerable Bank Website, 3000,192.168.50.101,VM23,
+attackdrill.blueteam3.local (blue-07),10.72.200.57,teler,Blue Team 3,9091,20.10.60.11/24,VM 7,
+VULN1.blueteam3.local,10.72.200.57,bwapp,Blue Team 3,9090,20.10.60.11/24,VM 7,
+VULN2.blueteam3.local,10.72.200.57,dvwa,Blue Team 3,9080,20.10.60.11/24,VM 7,
+VULN3.blueteam3.local,10.72.200.57,owasp-juiceshop,Blue Team 3,3000,20.10.60.11/24,VM 7,
+siem.blueteam3.local,10.72.200.58,wazuh,Blue Team 3,5601,20.10.60.12/24,VM 8,
+idps.blueteam3.local/,10.72.200.59,evebox,Blue Team 3,5636,20.10.60.13/24,VM 9,
+scheduler.cyberrange.local,10.72.200.61,scheduler api,Red Team,8002,10.10.30.30,VM10,192.168.60.61
+redteam.cyberrange.local,10.72.200.63,red team GUI,Red Team,3000,10.10.30.40,VM11,192.168.60.63
+console.cyberrange.local,10.72.200.62,attack generator,Red Team,3002,10.10.30.50,VM12,192.168.60.62
+attacker.cyberrange.local,10.72.200.64,,,,10.10.30.60,VM13,192.168.60.64
+botnet.cyberrange.local,10.72.200.65,,,,10.10.30.60,VM14,192.168.60.65
+attacker-kali,10.72.200.66,,Red Team,,,,192.168.60.66
+api.cyberrange.local,10.72.200.71,backend api,Green Team,8001,10.10.10.30,VM15,
+iam.cyberrange.local,10.72.200.73,keycloak IAM,Green Team,9000,10.10.10.40,VM16,
+mas.cyberrange.local,10.72.200.74,prometheus,Green Team,,10.10.10.50,VM17,
+aiv.cyberrange.local,10.72.200.74,grafana,Green Team,3000,10.10.10.50,VM18,
+greenteam.cyberrange.local,10.72.200.75,Green team GUI,Green Team,3000,10.10.10.70,VM19,
+whiteteam.cyberrange.local,10.72.200.50,white team GUI,white team,3000,10.10.20.30,VM20,

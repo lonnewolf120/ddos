@@ -18,7 +18,7 @@ The CyberAttackMap and NetworkAttackMap components are now properly integrated i
 - ✅ `src/app/page.tsx` - Updated with 4-tab layout
   - Network Topology (VM selection)
   - **Network Map** ⭐ NEW (Real-time packet visualization)
-  - **Cyber View** ⭐ NEW (Abstract particle visualization)
+  - **Attack Flow** ⭐ NEW (Abstract particle visualization)
   - Analytics (Statistics)
 
 ### Documentation:
@@ -49,7 +49,7 @@ Open your browser to: **http://localhost:3000**
 - Geographic layout (attackers left, targets right)
 - Real-time packet counter
 
-#### Cyber View Tab:
+#### Attack Flow Tab:
 - Abstract particle-based visualization
 - VM status indicators
 - Attack flow animations
@@ -61,7 +61,7 @@ Open your browser to: **http://localhost:3000**
 3. Select a Blue Team target
 4. Configure attack type and parameters
 5. Click "Launch Attack"
-6. Switch to **Network Map** or **Cyber View** tabs to see visualization
+6. Switch to **Network Map** or **Attack Flow** tabs to see visualization
 
 ## 🎨 What You'll See
 
@@ -87,7 +87,7 @@ Red Team VMs          →  Attack Packets  →         Blue Team VMs
 - ✅ Center info panel with stats
 - ✅ Legend showing packet types
 
-### Cyber View Visualization:
+### Attack Flow Visualization:
 ```
  Red Team              Center               Blue Team
 ┌─────────┐         ┌─────────┐         ┌─────────┐
@@ -180,7 +180,7 @@ npm run dev
 3. Select Blue Team target
 4. Launch an attack
 5. Watch Network Map tab for packet visualization
-6. Switch to Cyber View for alternative visualization
+6. Switch to Attack Flow for alternative visualization
 
 ### Monitor Performance:
 - Check browser FPS (should be 60 FPS)

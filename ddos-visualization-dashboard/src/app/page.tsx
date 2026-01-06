@@ -36,7 +36,8 @@ import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CyberAttackMap } from '@/components/CyberAttackMap';
-import { IsometricAttackMap } from '@/components/IsometricAttackMap';
+import { NetworkAttackMap } from '@/components/NetworkAttackMap';
+import InteractiveNetworkTopology from '@/components/InteractiveNetworkTopology';
 
 // ============================================================================
 // Types
@@ -60,6 +61,8 @@ interface AttackConfig {
   duration: number;
   workers: number;
   sockets: number;
+  enableIpSpoofing?: boolean;
+  spoofedIps?: string[];
 }
 
 interface AttackLog {
@@ -85,7 +88,7 @@ interface ActiveAttack {
 // Constants
 // ============================================================================
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8841';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://10.72.200.22:8841';
 
 const RED_TEAM_VMS: VMNode[] = [
   { id: 'scheduler', name: 'Attack Scheduler', ip: '10.72.200.61', role: 'Coordination', status: 'offline', x: 100, y: 100 },
@@ -96,9 +99,9 @@ const RED_TEAM_VMS: VMNode[] = [
 ];
 
 const BLUE_TEAM_VMS: VMNode[] = [
-  { id: 'team1', name: 'Blue Team 1', ip: '10.72.200.51', role: 'Target Infrastructure', status: 'offline', x: 700, y: 200 },
-  { id: 'team2', name: 'Blue Team 2', ip: '10.72.200.54', role: 'Target Infrastructure', status: 'offline', x: 700, y: 350 },
-  { id: 'team3', name: 'Blue Team 3', ip: '10.72.200.57', role: 'Target Infrastructure', status: 'offline', x: 700, y: 500 },
+  { id: 'team1', name: 'Blue Team 1', ip: '20.10.40.11', role: 'Target Infrastructure', status: 'offline', x: 700, y: 200 },
+  { id: 'team2', name: 'Blue Team 2', ip: '20.10.50.13', role: 'Target Infrastructure', status: 'offline', x: 700, y: 350 },
+  { id: 'team3', name: 'Blue Team 3', ip: '20.10.60.11', role: 'Target Infrastructure', status: 'offline', x: 700, y: 500 },
 ];
 
 const ATTACK_TYPES = [
@@ -138,29 +141,30 @@ const VMNodeCard: React.FC<{
 
   return (
     <motion.div
-      whileHover={{ scale: 1.02 }}
+      whileHover={{ scale: 1.02, y: -2 }}
       whileTap={{ scale: 0.98 }}
       className={`
-        relative p-3 rounded-lg border-2 cursor-pointer transition-all
-        ${isSelected ? 'border-blue-500 bg-blue-500/10' : 'border-gray-700 bg-gray-800/50'}
-        ${isAttacking ? 'border-red-500 bg-red-500/20 animate-pulse' : ''}
-        ${isTarget ? 'border-orange-500 bg-orange-500/20' : ''}
+        relative p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200
+        ${isSelected ? 'border-blue-500 bg-blue-500/10 shadow-lg' : 'border-gray-700 bg-gray-800/60 shadow-md'}
+        ${isAttacking ? 'border-red-500 bg-red-500/20 shadow-lg shadow-red-500/20 animate-pulse' : ''}
+        ${isTarget ? 'border-orange-500 bg-orange-500/20 shadow-lg shadow-orange-500/20' : ''}
+        hover:shadow-xl
       `}
       onClick={onClick}
     >
       <div className="flex items-center gap-3">
-        <div className={`p-2 rounded-full ${getStatusColor()}`}>
+        <div className={`p-2.5 rounded-xl ${getStatusColor()} shadow-md`}>
           {getStatusIcon()}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-sm text-white truncate">{vm.name}</p>
-          <p className="text-xs text-gray-400">{vm.ip}</p>
+          <p className="font-semibold text-sm text-white truncate">{vm.name}</p>
+          <p className="text-xs text-gray-400 font-mono">{vm.ip}</p>
         </div>
         {isSelected && (
-          <CheckCircle2 className="w-5 h-5 text-blue-500" />
+          <CheckCircle2 className="w-5 h-5 text-blue-500 flex-shrink-0" />
         )}
       </div>
-      <Badge variant="outline" className="mt-2 text-xs">
+      <Badge variant="outline" className="mt-3 text-xs font-medium">
         {vm.role}
       </Badge>
     </motion.div>
@@ -239,13 +243,13 @@ const LogViewer: React.FC<{ logs: AttackLog[] }> = ({ logs }) => {
   return (
     <div
       ref={logContainerRef}
-      className="bg-gray-900 rounded-lg p-3 h-64 overflow-y-auto font-mono text-xs"
+      className="bg-gray-900/80 backdrop-blur-sm rounded-2xl p-4 h-64 overflow-y-auto font-mono text-xs border border-gray-800 shadow-inner"
     >
       {logs.length === 0 ? (
-        <p className="text-gray-500 text-center py-4">No attack logs yet...</p>
+        <p className="text-gray-500 text-center py-8 text-sm">No attack logs yet...</p>
       ) : (
         logs.map((log, index) => (
-          <div key={index} className={`mb-1 ${getLogStyle(log.type)}`}>
+          <div key={index} className={`mb-2 ${getLogStyle(log.type)} leading-relaxed`}>
             <span className="text-gray-500">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
             {log.source && <span className="text-blue-400"> [{log.source}]</span>}
             <span> {log.message}</span>
@@ -270,16 +274,28 @@ export default function DDoSDashboard() {
     attackType: 'http_flood',
     sourceVMs: [],
     targetId: '',
-    targetPort: 9090,
+    targetPort: 9080,
     duration: 120,
     workers: 50,
     sockets: 100,
+    enableIpSpoofing: false,
+    spoofedIps: [],
   });
   const [activeAttack, setActiveAttack] = useState<ActiveAttack | null>(null);
   const [attackLogs, setAttackLogs] = useState<AttackLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [apiConnected, setApiConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+
+  // IP Spoofing State
+  const [ipSpoofingEnabled, setIpSpoofingEnabled] = useState(false);
+  const [useSequentialIps, setUseSequentialIps] = useState(false);
+  const [selectedIpRange, setSelectedIpRange] = useState('10.0.0.0/8');
+  const [customIpRange, setCustomIpRange] = useState('');
+  const [startingIp, setStartingIp] = useState('192.168.1.1');
+  const [ipCount, setIpCount] = useState(10);
+  const [generatedIps, setGeneratedIps] = useState<string[]>([]);
+  const [commonIpRanges, setCommonIpRanges] = useState<string[]>([]);
 
   // Check API connection
   const checkApiConnection = useCallback(async () => {
@@ -295,6 +311,57 @@ export default function DDoSDashboard() {
     setApiConnected(false);
     return false;
   }, []);
+
+  // Fetch common IP ranges for spoofing
+  const fetchCommonIpRanges = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/spoofing/ranges`);
+      if (response.ok) {
+        const data = await response.json();
+        setCommonIpRanges(data.ranges || []);
+        if (data.ranges && data.ranges.length > 0) {
+          setSelectedIpRange(data.ranges[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch common IP ranges:', error);
+    }
+  }, []);
+
+  // Generate random IPs for spoofing
+  const generateRandomIps = async () => {
+    try {
+      const requestBody = useSequentialIps
+        ? { starting_ip: startingIp, count: ipCount, use_sequential: true }
+        : { ip_range: customIpRange || selectedIpRange, count: ipCount, use_sequential: false };
+
+      const response = await fetch(`${API_BASE_URL}/api/spoofing/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setGeneratedIps(data.spoofed_ips || []);
+        setAttackConfig(prev => ({
+          ...prev,
+          spoofedIps: data.spoofed_ips || []
+        }));
+
+        const source = useSequentialIps
+          ? `starting from ${startingIp}`
+          : `from ${customIpRange || selectedIpRange}`;
+        addLog('success', `Generated ${data.count} ${useSequentialIps ? 'sequential' : 'random'} IP addresses ${source}`);
+      } else {
+        const error = await response.json();
+        addLog('error', `Failed to generate IPs: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('IP generation failed:', error);
+      addLog('error', 'Failed to generate spoofed IPs');
+    }
+  };
 
   // Fetch VM statuses
   const fetchVMStatuses = useCallback(async () => {
@@ -410,12 +477,19 @@ export default function DDoSDashboard() {
       addLog('error', 'No target selected');
       return;
     }
+    if (ipSpoofingEnabled && generatedIps.length === 0) {
+      addLog('error', 'IP spoofing enabled but no IPs generated. Click "Generate Random IPs" first.');
+      return;
+    }
 
     setIsLoading(true);
     setAttackLogs([]);
     addLog('info', `Starting ${attackConfig.attackType} attack...`);
     addLog('info', `Sources: ${selectedSources.join(', ')}`);
     addLog('info', `Target: ${selectedTarget}:${attackConfig.targetPort}`);
+    if (ipSpoofingEnabled) {
+      addLog('info', `IP Spoofing: Enabled (${generatedIps.length} spoofed IPs)`);
+    }
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/attacks/execute`, {
@@ -429,6 +503,8 @@ export default function DDoSDashboard() {
           duration: attackConfig.duration,
           workers: attackConfig.workers,
           sockets: attackConfig.sockets,
+          enable_ip_spoofing: ipSpoofingEnabled,
+          spoofed_ips: ipSpoofingEnabled ? generatedIps : [],
         }),
       });
 
@@ -492,6 +568,7 @@ export default function DDoSDashboard() {
   useEffect(() => {
     checkApiConnection();
     fetchVMStatuses();
+    fetchCommonIpRanges();
 
     const interval = setInterval(() => {
       checkApiConnection();
@@ -553,10 +630,11 @@ export default function DDoSDashboard() {
         {/* Main Content */}
         <main className="container mx-auto px-4 py-6">
           <Tabs defaultValue="topology" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4 lg:w-auto">
+            <TabsList className="grid w-full grid-cols-5 lg:w-auto">
               <TabsTrigger value="topology">Network Topology</TabsTrigger>
+              <TabsTrigger value="interactive">Interactive Map</TabsTrigger>
               <TabsTrigger value="network-map">Network Map</TabsTrigger>
-              <TabsTrigger value="visualization">Cyber View</TabsTrigger>
+              <TabsTrigger value="visualization">Attack Flow</TabsTrigger>
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
             </TabsList>
 
@@ -611,25 +689,37 @@ export default function DDoSDashboard() {
                         </div>
 
                         {/* Arrow */}
-                        <div className="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                        <div className="hidden md:flex items-center justify-center absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
                           <motion.div
-                            animate={{ x: [0, 10, 0] }}
-                            transition={{ duration: 1, repeat: Infinity }}
-                            className={`p-3 rounded-full ${activeAttack?.status === 'running' ? 'bg-red-500' : 'bg-gray-700'}`}
+                            animate={{
+                              x: activeAttack?.status === 'running' ? [0, 8, 0] : 0,
+                              scale: activeAttack?.status === 'running' ? [1, 1.1, 1] : 1
+                            }}
+                            transition={{
+                              duration: 1.5,
+                              repeat: activeAttack?.status === 'running' ? Infinity : 0,
+                              ease: "easeInOut"
+                            }}
+                            className={`
+                              p-4 rounded-2xl transition-all duration-300
+                              ${activeAttack?.status === 'running'
+                                ? 'bg-red-600 shadow-lg shadow-red-600/50'
+                                : 'bg-gray-700 shadow-md'}
+                            `}
                           >
-                            <ArrowRight className="w-6 h-6" />
+                            <ArrowRight className="w-8 h-8 text-white" />
                           </motion.div>
                         </div>
 
                         {/* Blue Team VMs */}
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2 mb-4">
-                            <div className="p-1.5 bg-blue-500/20 rounded">
-                              <Shield className="w-4 h-4 text-blue-500" />
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-3 mb-5">
+                            <div className="p-2 bg-blue-500/20 rounded-xl shadow-sm">
+                              <Shield className="w-5 h-5 text-blue-500" />
                             </div>
-                            <h3 className="font-semibold text-blue-400">Blue Team (Targets)</h3>
+                            <h3 className="font-semibold text-lg text-blue-400">Blue Team (Targets)</h3>
                           </div>
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             {blueTeamVMs.map((vm) => (
                               <VMNodeCard
                                 key={vm.id}
@@ -649,8 +739,8 @@ export default function DDoSDashboard() {
                   {/* Attack Logs */}
                   <Card className="bg-gray-900/50 border-gray-800">
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Terminal className="w-5 h-5 text-green-500" />
+                      <CardTitle className="flex items-center gap-3">
+                        <Terminal className="w-6 h-6 text-green-500" />
                         Attack Logs
                       </CardTitle>
                     </CardHeader>
@@ -666,16 +756,16 @@ export default function DDoSDashboard() {
                   {/* Attack Configuration Card */}
                   <Card className="bg-gray-900/50 border-gray-800">
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Settings className="w-5 h-5 text-purple-500" />
+                      <CardTitle className="flex items-center gap-3">
+                        <Settings className="w-6 h-6 text-purple-500" />
                         Attack Configuration
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4">
+                    <CardContent className="space-y-5">
 
                       {/* Attack Type */}
-                      <div className="space-y-2">
-                        <Label>Attack Type</Label>
+                      <div className="space-y-3">
+                        <Label className="text-sm font-semibold">Attack Type</Label>
                         <Select
                           value={attackConfig.attackType}
                           onValueChange={(value) => setAttackConfig({ ...attackConfig, attackType: value })}
@@ -683,9 +773,9 @@ export default function DDoSDashboard() {
                           <SelectTrigger>
                             <SelectValue placeholder="Select attack type" />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="bg-gray-900 border-gray-700">
                             {ATTACK_TYPES.map((type) => (
-                              <SelectItem key={type.id} value={type.id}>
+                              <SelectItem key={type.id} value={type.id} className="bg-gray-900 hover:bg-gray-800 focus:bg-gray-800">
                                 <div className="flex items-center gap-2">
                                   <div
                                     className="w-3 h-3 rounded-full"
@@ -697,14 +787,14 @@ export default function DDoSDashboard() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-400 bg-gray-800/50 p-2 rounded">
                           {ATTACK_TYPES.find(t => t.id === attackConfig.attackType)?.description}
                         </p>
                       </div>
 
                       {/* Target Port */}
-                      <div className="space-y-2">
-                        <Label>Target Port</Label>
+                      <div className="space-y-3">
+                        <Label className="text-sm font-semibold">Target Port</Label>
                         <Select
                           value={attackConfig.targetPort.toString()}
                           onValueChange={(value) => setAttackConfig({ ...attackConfig, targetPort: parseInt(value) })}
@@ -712,59 +802,192 @@ export default function DDoSDashboard() {
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="9080">9080 (bWAPP)</SelectItem>
-                            <SelectItem value="9090">9090 (DVWA)</SelectItem>
-                            <SelectItem value="3000">3000 (Juice Shop)</SelectItem>
-                            <SelectItem value="80">80 (HTTP)</SelectItem>
-                            <SelectItem value="443">443 (HTTPS)</SelectItem>
+                          <SelectContent className="bg-gray-900 border-gray-700">
+                            <SelectItem value="9080" className="bg-gray-900 hover:bg-gray-800 focus:bg-gray-800">9080 (DVWA)</SelectItem>
+                            <SelectItem value="9090" className="bg-gray-900 hover:bg-gray-800 focus:bg-gray-800">9090 (bWAPP)</SelectItem>
+                            <SelectItem value="3000" className="bg-gray-900 hover:bg-gray-800 focus:bg-gray-800">3000 (Juice Shop)</SelectItem>
+                            <SelectItem value="80" className="bg-gray-900 hover:bg-gray-800 focus:bg-gray-800">80 (HTTP)</SelectItem>
+                            <SelectItem value="443" className="bg-gray-900 hover:bg-gray-800 focus:bg-gray-800">443 (HTTPS)</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
 
                       {/* Duration */}
-                      <div className="space-y-2">
-                        <Label>Duration (seconds)</Label>
+                      <div className="space-y-3">
+                        <Label className="text-sm font-semibold">Duration (seconds)</Label>
                         <Input
                           type="number"
                           min={10}
                           max={600}
                           value={attackConfig.duration}
                           onChange={(e) => setAttackConfig({ ...attackConfig, duration: parseInt(e.target.value) || 120 })}
+                          className="h-11"
                         />
                       </div>
 
                       {/* Workers (for HTTP floods) */}
                       {['http_flood', 'hulk'].includes(attackConfig.attackType) && (
-                        <div className="space-y-2">
-                          <Label>Workers</Label>
+                        <div className="space-y-3">
+                          <Label className="text-sm font-semibold">Workers</Label>
                           <Input
                             type="number"
                             min={1}
                             max={500}
                             value={attackConfig.workers}
                             onChange={(e) => setAttackConfig({ ...attackConfig, workers: parseInt(e.target.value) || 50 })}
+                            className="h-11"
                           />
                         </div>
                       )}
 
                       {/* Sockets */}
                       {['http_flood', 'slowloris'].includes(attackConfig.attackType) && (
-                        <div className="space-y-2">
-                          <Label>Sockets</Label>
+                        <div className="space-y-3">
+                          <Label className="text-sm font-semibold">Sockets</Label>
                           <Input
                             type="number"
                             min={10}
                             max={1000}
                             value={attackConfig.sockets}
                             onChange={(e) => setAttackConfig({ ...attackConfig, sockets: parseInt(e.target.value) || 100 })}
+                            className="h-11"
                           />
                         </div>
                       )}
 
+                      {/* IP Spoofing Configuration */}
+                      <div className="pt-6 border-t border-gray-700 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label className="text-sm font-semibold">IP Spoofing</Label>
+                            <p className="text-xs text-gray-400">Randomize source IP addresses</p>
+                          </div>
+                          <Switch
+                            checked={ipSpoofingEnabled}
+                            onCheckedChange={(checked) => {
+                              setIpSpoofingEnabled(checked);
+                              if (!checked) {
+                                setGeneratedIps([]);
+                              }
+                            }}
+                          />
+                        </div>
+
+                        {ipSpoofingEnabled && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="space-y-4 pt-2"
+                          >
+                            {/* Generation Mode Toggle */}
+                            <div className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                              <div className="space-y-0.5">
+                                <Label className="text-sm">Generation Mode</Label>
+                                <p className="text-xs text-gray-400">
+                                  {useSequentialIps ? 'Sequential from starting IP' : 'Random from IP range'}
+                                </p>
+                              </div>
+                              <Switch
+                                checked={useSequentialIps}
+                                onCheckedChange={(checked) => {
+                                  setUseSequentialIps(checked);
+                                  setGeneratedIps([]);
+                                }}
+                              />
+                            </div>
+
+                            {useSequentialIps ? (
+                              /* Sequential IP Generation */
+                              <div className="space-y-2">
+                                <Label className="text-sm">Starting IP Address</Label>
+                                <Input
+                                  placeholder="e.g., 192.168.1.1"
+                                  value={startingIp}
+                                  onChange={(e) => setStartingIp(e.target.value)}
+                                  className="h-11 font-mono text-xs"
+                                />
+                                <p className="text-xs text-gray-500">
+                                  Will generate {ipCount} sequential IPs starting from this address
+                                </p>
+                              </div>
+                            ) : (
+                              /* Random IP Generation from CIDR Range */
+                              <>
+                                <div className="space-y-2">
+                                  <Label className="text-sm">IP Range</Label>
+                                  <Select value={selectedIpRange} onValueChange={setSelectedIpRange}>
+                                    <SelectTrigger className="h-11">
+                                      <SelectValue placeholder="Select IP range" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {commonIpRanges.map((range) => (
+                                        <SelectItem key={range} value={range}>
+                                          {range}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label className="text-sm">Custom IP Range (CIDR)</Label>
+                                  <Input
+                                    placeholder="e.g., 192.168.1.0/24"
+                                    value={customIpRange}
+                                    onChange={(e) => setCustomIpRange(e.target.value)}
+                                    className="h-11 font-mono text-xs"
+                                  />
+                                </div>
+                              </>
+                            )}
+
+                            <div className="space-y-2">
+                              <Label className="text-sm">Number of IPs</Label>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={1000}
+                                value={ipCount}
+                                onChange={(e) => setIpCount(parseInt(e.target.value) || 10)}
+                                className="h-11"
+                              />
+                            </div>
+
+                            <Button
+                              variant="outline"
+                              className="w-full"
+                              onClick={generateRandomIps}
+                              disabled={isLoading}
+                            >
+                              <RefreshCw className="w-4 h-4 mr-2" />
+                              {useSequentialIps ? 'Generate Sequential IPs' : 'Generate Random IPs'}
+                            </Button>
+
+                            {generatedIps.length > 0 && (
+                              <div className="space-y-2">
+                                <Label className="text-sm">Generated IPs ({generatedIps.length})</Label>
+                                <div className="max-h-32 overflow-y-auto bg-gray-800 rounded-lg p-3 space-y-1">
+                                  {generatedIps.slice(0, 10).map((ip, idx) => (
+                                    <div key={idx} className="text-xs font-mono text-gray-300">
+                                      {ip}
+                                    </div>
+                                  ))}
+                                  {generatedIps.length > 10 && (
+                                    <div className="text-xs text-gray-500 italic">
+                                      ... and {generatedIps.length - 10} more
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </motion.div>
+                        )}
+                      </div>
+
                       {/* Selected Summary */}
-                      <div className="pt-4 border-t border-gray-700">
-                        <div className="space-y-2 text-sm">
+                      <div className="pt-6 border-t border-gray-700">
+                        <div className="space-y-3 text-sm">
                           <div className="flex justify-between">
                             <span className="text-gray-400">Sources:</span>
                             <span className="text-white">{selectedSources.length} VM(s)</span>
@@ -878,17 +1101,42 @@ export default function DDoSDashboard() {
               </div>
             </TabsContent>
 
+            {/* Interactive Network Topology Tab - Editable Cytoscape Map */}
+            <TabsContent value="interactive" className="space-y-6">
+              <Card className="bg-gray-900/50 border-gray-800">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Network className="w-5 h-5 text-blue-500" />
+                    Interactive Network Topology
+                  </CardTitle>
+                  <CardDescription>
+                    Click nodes to select attackers and targets. Drag to reposition. Zoom and pan to explore.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <InteractiveNetworkTopology
+                    redTeamVMs={redTeamVMs}
+                    blueTeamVMs={blueTeamVMs}
+                    selectedSources={selectedSources}
+                    selectedTarget={selectedTarget}
+                    onSourceSelect={toggleSourceVM}
+                    onTargetSelect={(id) => setSelectedTarget(id)}
+                    isAttackActive={activeAttack?.status === 'running'}
+                    attackType={attackConfig.attackType}
+                  />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
             {/* Network Map Tab - NEW Enhanced Visualization */}
             <TabsContent value="network-map" className="space-y-6">
-              <IsometricAttackMap
+              <NetworkAttackMap
                 redTeamVMs={redTeamVMs}
                 blueTeamVMs={blueTeamVMs}
                 selectedSources={selectedSources}
                 selectedTarget={selectedTarget}
-                targetPort={attackConfig.targetPort}
                 isAttacking={activeAttack?.status === 'running'}
-                attackType={attackConfig.attackType}
-                packetsPerSecond={100}
+                attackLogs={attackLogs}
               />
 
               {/* Attack Logs below network map */}

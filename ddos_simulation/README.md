@@ -4,15 +4,29 @@ DDoS simulation written in Python using "scapy" and "multiprocessing" libraries.
 
 ![Screenshot](https://i.imgur.com/f9yRPDP.png)
 
+## 🆕 NEW: Stop Attack Functionality
 
+The distributed attack executor now supports **stopping attacks early**!
+
+- ✅ Stop individual attacks by ID
+- ✅ Stop all running attacks with one command
+- ✅ Emergency stop script: `python3 stop_attacks.py`
+- ✅ Background execution mode for better control
+
+📖 **[Read the full guide](STOPPING_ATTACKS.md)**
+
+Quick emergency stop:
+```bash
+python3 stop_attacks.py  # Stops all attacks on all Red Team VMs
+```
 
 ## Options:
 
 There are 3 different DDoS attacks:
 
-- Flood 
+- Flood
 
-- Teardrop 
+- Teardrop
 
 - Black nurse
 

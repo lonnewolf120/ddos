@@ -1,0 +1,793 @@
+<!--
+  Wazuh Custom Rules for DDoS Attack Detection and Defense
+  Cyber Range - Blue Team Protection
+
+  Purpose: Detect and alert on DDoS attacks from Red Team VMs
+  Monitored Ports: 9080 (bWAPP), 9090 (DVWA), 3000 (OWASP Juice Shop), 80 (HTTP), 443 (HTTPS)
+
+  Red Team Attack Sources:
+  - 10.10.30.30 (Attack Scheduler) / WAN: 10.72.200.61
+  - 10.10.30.40 (Red Team GUI) / WAN: 10.72.200.63
+  - 10.10.30.50 (Attack Generator) / WAN: 10.72.200.62
+  - 10.10.30.60 (Botnet Generators) / WAN: 10.72.200.64, 10.72.200.65
+
+  Blue Team Targets:
+  - 20.10.40.11/24 (Blue Team 1) / WAN: 10.72.200.51
+  - 20.10.50.11/24 (Blue Team 2) / WAN: 10.72.200.54
+  - 20.10.60.11/24 (Blue Team 3) / WAN: 10.72.200.57
+-->
+
+<group name="ddos,cyberrange,">
+
+  <!-- ========================================================================
+       BASELINE RULES - Connection Tracking
+       ======================================================================== -->
+
+  <!-- Rule 100001: TCP Connection Established -->
+  <rule id="200001" level="0">
+    <match>PROTO=TCP|proto=6|tcp|TCP</match>
+    <description>TCP connection established</description>
+    <group>connection,tcp,</group>
+  </rule>
+
+  <!-- Rule 200002: UDP Packet Received -->
+  <rule id="200002" level="0">
+    <match>PROTO=UDP|proto=17|udp|UDP</match>
+    <description>UDP packet received</description>
+    <group>connection,udp,</group>
+  </rule>
+
+  <!-- Rule 200003: ICMP Packet Received -->
+  <rule id="200003" level="0">
+    <match>PROTO=ICMP|proto=1|icmp|ICMP</match>
+    <description>ICMP packet received</description>
+    <group>connection,icmp,</group>
+  </rule>
+
+  <!-- Rule 200004: HTTP Request -->
+  <rule id="200004" level="0">
+    <match>GET |POST |PUT |DELETE |HEAD |OPTIONS |"GET |"POST |"PUT </match>
+    <description>HTTP request received</description>
+    <group>web,access,</group>
+  </rule>
+
+  <!-- ========================================================================
+       RED TEAM SOURCE IP DETECTION
+       ======================================================================== -->
+
+  <!-- Rule 200010: Traffic from Red Team Scheduler -->
+  <rule id="200010" level="3">
+    <if_sid>200001,200002,200003,200004</if_sid>
+    <match>REDTEAM_|SRC=10.10.30.30|SRC=10.72.200.61|10.10.30.30|10.72.200.61</match>
+    <description>Traffic from Red Team Attack Scheduler</description>
+    <group>red_team,attack_source,</group>
+  </rule>
+
+  <rule id="200011" level="3">
+    <if_sid>200001,200002,200003,200004</if_sid>
+    <match>SRC=10.72.200.61|10.72.200.61</match>
+    <description>Traffic from Red Team Attack Scheduler WAN (10.72.200.61)</description>
+    <group>red_team,attack_source,</group>
+  </rule>
+
+  <!-- Rule 100012: Traffic from Red Team Generator -->
+  <rule id="200012" level="3">
+    <if_sid>200001,200002,200003,200004</if_sid>
+    <match>SRC=10.10.30.50|10.10.30.50</match>
+    <description>Traffic from Red Team Attack Generator (10.10.30.50)</description>
+    <group>red_team,attack_source,</group>
+  </rule>
+
+  <rule id="200013" level="3">
+    <if_sid>200001,200002,200003,200004</if_sid>
+    <match>SRC=10.72.200.62|10.72.200.62</match>
+    <description>Traffic from Red Team Attack Generator WAN (10.72.200.62)</description>
+    <group>red_team,attack_source,</group>
+  </rule>
+
+  <!-- Rule 100014: Traffic from Red Team GUI -->
+  <rule id="200014" level="3">
+    <if_sid>200001,200002,200003,200004</if_sid>
+    <match>SRC=10.10.30.40|10.10.30.40</match>
+    <description>Traffic from Red Team GUI (10.10.30.40)</description>
+    <group>red_team,attack_source,</group>
+  </rule>
+
+  <rule id="200015" level="3">
+    <if_sid>200001,200002,200003,200004</if_sid>
+    <match>SRC=10.72.200.63|10.72.200.63</match>
+    <description>Traffic from Red Team GUI WAN (10.72.200.63)</description>
+    <group>red_team,attack_source,</group>
+  </rule>
+
+  <!-- Rule 100016: Traffic from Botnet Generator 1 -->
+  <rule id="200016" level="3">
+    <if_sid>200001,200002,200003,200004</if_sid>
+    <match>SRC=10.10.30.60|10.10.30.60</match>
+    <description>Traffic from Botnet Generators (10.10.30.60)</description>
+    <group>red_team,attack_source,botnet,</group>
+  </rule>
+
+  <rule id="200017" level="3">
+    <if_sid>200001,200002,200003,200004</if_sid>
+    <match>SRC=10.72.200.64|10.72.200.64</match>
+    <description>Traffic from Botnet Generator 1 WAN (10.72.200.64)</description>
+    <group>red_team,attack_source,botnet,</group>
+  </rule>
+
+  <rule id="200018" level="3">
+    <if_sid>200001,200002,200003,200004</if_sid>
+    <match>SRC=10.72.200.65|10.72.200.65</match>
+    <description>Traffic from Botnet Generator 2 WAN (10.72.200.65)</description>
+    <group>red_team,attack_source,botnet,</group>
+  </rule>
+
+  <!-- Rule 100019: Traffic from any Red Team subnet -->
+  <rule id="200019" level="3">
+    <if_sid>200001,200002,200003,200004</if_sid>
+    <match>SRC=10.10.30.|10.10.30.</match>
+    <description>Traffic from Red Team subnet (10.10.30.0/24)</description>
+    <group>red_team,attack_source,</group>
+  </rule>
+
+  <!-- ========================================================================
+       BLUE TEAM TARGET PORT MONITORING
+       ======================================================================== -->
+
+  <!-- Rule 100020: Traffic to bWAPP (Port 9080) -->
+  <rule id="200020" level="2">
+    <if_sid>200001,200002,200004</if_sid>
+    <match>DPT=9080|:9080 |dport 9080</match>
+    <description>Traffic to bWAPP service (port 9080)</description>
+    <group>blue_team,vulnerable_app,bwapp,</group>
+  </rule>
+
+  <!-- Rule 100021: Traffic to DVWA (Port 9090) -->
+  <rule id="200021" level="2">
+    <if_sid>200001,200002,200004</if_sid>
+    <match>DPT=9090|:9090 |dport 9090</match>
+    <description>Traffic to DVWA service (port 9090)</description>
+    <group>blue_team,vulnerable_app,dvwa,</group>
+  </rule>
+
+  <!-- Rule 100022: Traffic to OWASP Juice Shop (Port 3000) -->
+  <rule id="200022" level="2">
+    <if_sid>200001,200002,200004</if_sid>
+    <match>DPT=3000|:3000 |dport 3000</match>
+    <description>Traffic to OWASP Juice Shop (port 3000)</description>
+    <group>blue_team,vulnerable_app,juiceshop,</group>
+  </rule>
+
+  <!-- Rule 100023: Traffic to HTTP (Port 80) -->
+  <rule id="200023" level="2">
+    <if_sid>200001,200002,200004</if_sid>
+    <match>DPT=80 |:80 |dport 80 </match>
+    <description>Traffic to HTTP service (port 80)</description>
+    <group>blue_team,http,</group>
+  </rule>
+
+  <!-- Rule 100024: Traffic to HTTPS (Port 443) -->
+  <rule id="200024" level="2">
+    <if_sid>200001,200002,200004</if_sid>
+    <match>DPT=443 |:443 |dport 443</match>
+    <description>Traffic to HTTPS service (port 443)</description>
+    <group>blue_team,https,</group>
+  </rule>
+
+  <!-- ========================================================================
+       SYN FLOOD ATTACK DETECTION
+       ======================================================================== -->
+
+  <!-- Rule 200100: SYN packet from Red Team (hping3/Scapy) -->
+  <rule id="200100" level="5">
+    <match>REDTEAM_SYN:|IPTABLES_.*SYN</match>
+    <description>SYN packet from Red Team source (hping3/Scapy flood detected)</description>
+    <group>syn_flood,ddos_attack,hping3,scapy,</group>
+  </rule>
+
+  <!-- Rule 200101: Multiple SYN packets to Blue Team ports (Frequency) -->
+  <rule id="200101" level="8" frequency="50" timeframe="10">
+    <if_matched_sid>200100</if_matched_sid>
+    <same_source_ip/>
+    <description>SYN Flood Attack Detected: 50+ SYN packets in 10 seconds from Red Team</description>
+    <group>syn_flood,ddos_attack,critical,</group>
+  </rule>
+
+  <!-- Rule 200102: SYN Flood to bWAPP (Port 9080) -->
+  <rule id="200102" level="10" frequency="100" timeframe="10">
+    <if_matched_sid>200100</if_matched_sid>
+    <if_sid>200020</if_sid>
+    <same_source_ip/>
+    <description>CRITICAL: SYN Flood on bWAPP (port 9080) - 100+ packets/10s</description>
+    <group>syn_flood,ddos_attack,critical,bwapp,</group>
+  </rule>
+
+  <!-- Rule 200103: SYN Flood to DVWA (Port 9090) -->
+  <rule id="200103" level="10" frequency="100" timeframe="10">
+    <if_matched_sid>200100</if_matched_sid>
+    <if_sid>200021</if_sid>
+    <same_source_ip/>
+    <description>CRITICAL: SYN Flood on DVWA (port 9090) - 100+ packets/10s</description>
+    <group>syn_flood,ddos_attack,critical,dvwa,</group>
+  </rule>
+
+  <!-- Rule 200104: SYN Flood to Juice Shop (Port 3000) -->
+  <rule id="200104" level="10" frequency="100" timeframe="10">
+    <if_matched_sid>200100</if_matched_sid>
+    <if_sid>200022</if_sid>
+    <same_source_ip/>
+    <description>CRITICAL: SYN Flood on OWASP Juice Shop (port 3000) - 100+ packets/10s</description>
+    <group>syn_flood,ddos_attack,critical,juiceshop,</group>
+  </rule>
+
+  <!-- Rule 200105: SYN Flood to HTTP (Port 80) -->
+  <rule id="200105" level="10" frequency="100" timeframe="10">
+    <if_matched_sid>200100</if_matched_sid>
+    <if_sid>200023</if_sid>
+    <same_source_ip/>
+    <description>CRITICAL: SYN Flood on HTTP (port 80) - 100+ packets/10s</description>
+    <group>syn_flood,ddos_attack,critical,http,</group>
+  </rule>
+
+  <!-- Rule 200106: SYN Flood to HTTPS (Port 443) -->
+  <rule id="200106" level="10" frequency="100" timeframe="10">
+    <if_matched_sid>200100</if_matched_sid>
+    <if_sid>200024</if_sid>
+    <same_source_ip/>
+    <description>CRITICAL: SYN Flood on HTTPS (port 443) - 100+ packets/10s</description>
+    <group>syn_flood,ddos_attack,critical,https,</group>
+  </rule>
+
+  <!-- ========================================================================
+       UDP FLOOD ATTACK DETECTION
+       ======================================================================== -->
+
+  <!-- Rule 200200: UDP flood from Red Team (hping3/Scapy) -->
+  <rule id="200200" level="5">
+    <match>REDTEAM_UDP:|IPTABLES_.*PROTO=UDP</match>
+    <description>UDP packet from Red Team source (hping3/Scapy flood detected)</description>
+    <group>udp_flood,ddos_attack,hping3,scapy,</group>
+  </rule>
+
+  <!-- Rule 200201: UDP Flood Detected (Frequency) -->
+  <rule id="200201" level="8" frequency="100" timeframe="10">
+    <if_matched_sid>200200</if_matched_sid>
+    <same_source_ip/>
+    <description>UDP Flood Attack Detected: 100+ UDP packets in 10 seconds</description>
+    <group>udp_flood,ddos_attack,critical,</group>
+  </rule>
+
+  <!-- Rule 200202: UDP Flood to bWAPP -->
+  <rule id="200202" level="10" frequency="150" timeframe="10">
+    <if_matched_sid>200200</if_matched_sid>
+    <if_sid>200020</if_sid>
+    <same_source_ip/>
+    <description>CRITICAL: UDP Flood on bWAPP (port 9080) - 150+ packets/10s</description>
+    <group>udp_flood,ddos_attack,critical,bwapp,</group>
+  </rule>
+
+  <!-- Rule 200203: UDP Flood to DVWA -->
+  <rule id="200203" level="10" frequency="150" timeframe="10">
+    <if_matched_sid>200200</if_matched_sid>
+    <if_sid>200021</if_sid>
+    <same_source_ip/>
+    <description>CRITICAL: UDP Flood on DVWA (port 9090) - 150+ packets/10s</description>
+    <group>udp_flood,ddos_attack,critical,dvwa,</group>
+  </rule>
+
+  <!-- Rule 200204: UDP Flood to Juice Shop -->
+  <rule id="200204" level="10" frequency="150" timeframe="10">
+    <if_matched_sid>200200</if_matched_sid>
+    <if_sid>200022</if_sid>
+    <same_source_ip/>
+    <description>CRITICAL: UDP Flood on OWASP Juice Shop (port 3000) - 150+ packets/10s</description>
+    <group>udp_flood,ddos_attack,critical,juiceshop,</group>
+  </rule>
+
+  <!-- ========================================================================
+       ICMP FLOOD ATTACK DETECTION
+       ======================================================================== -->
+
+  <!-- Rule 200300: ICMP flood from Red Team (Scapy) -->
+  <rule id="200300" level="5">
+    <match>REDTEAM_ICMP:|IPTABLES_.*PROTO=ICMP|TYPE=8|TYPE=3.*CODE=3</match>
+    <description>ICMP packet from Red Team source (Scapy flood: Echo Request/Port Unreachable)</description>
+    <group>icmp_flood,ddos_attack,scapy,</group>
+  </rule>
+
+  <!-- Rule 200301: ICMP Flood Detected -->
+  <rule id="200301" level="8" frequency="50" timeframe="10">
+    <if_matched_sid>200300</if_matched_sid>
+    <same_source_ip/>
+    <description>ICMP Flood Attack Detected: 50+ ICMP packets in 10 seconds</description>
+    <group>icmp_flood,ddos_attack,critical,</group>
+  </rule>
+
+  <!-- Rule 200302: ICMP Flood - High Volume -->
+  <rule id="200302" level="10" frequency="200" timeframe="10">
+    <if_matched_sid>200300</if_matched_sid>
+    <same_source_ip/>
+    <description>CRITICAL: ICMP Flood - 200+ packets/10s from Red Team</description>
+    <group>icmp_flood,ddos_attack,critical,</group>
+  </rule>
+
+  <!-- Rule 200303: ICMP Flood to Blue Team 1 -->
+  <rule id="200303" level="10" frequency="100" timeframe="10">
+    <if_matched_sid>200300</if_matched_sid>
+    <match>DST=20.10.40.11|20.10.40.11</match>
+    <same_source_ip/>
+    <description>CRITICAL: ICMP Flood targeting Blue Team 1 (20.10.40.11)</description>
+    <group>icmp_flood,ddos_attack,critical,blueteam1,</group>
+  </rule>
+
+  <!-- Rule 200304: ICMP Flood to Blue Team 2 -->
+  <rule id="200304" level="10" frequency="100" timeframe="10">
+    <if_matched_sid>200300</if_matched_sid>
+    <match>DST=20.10.50.11|20.10.50.11</match>
+    <same_source_ip/>
+    <description>CRITICAL: ICMP Flood targeting Blue Team 2 (20.10.50.11)</description>
+    <group>icmp_flood,ddos_attack,critical,blueteam2,</group>
+  </rule>
+
+  <!-- Rule 200305: ICMP Flood to Blue Team 3 -->
+  <rule id="200305" level="10" frequency="100" timeframe="10">
+    <if_matched_sid>200300</if_matched_sid>
+    <match>DST=20.10.60.11|20.10.60.11</match>
+    <same_source_ip/>
+    <description>CRITICAL: ICMP Flood targeting Blue Team 3 (20.10.60.11)</description>
+    <group>icmp_flood,ddos_attack,critical,blueteam3,</group>
+  </rule>
+
+  <!-- ========================================================================
+       HTTP FLOOD ATTACK DETECTION (GoldenEye, HULK)
+       ======================================================================== -->
+
+  <!-- Rule 100400: HTTP Request from Red Team -->
+  <rule id="200400" level="5">
+    <if_sid>200010,200011,200012,200013,200014,200015,200016,200017,200018,200019</if_sid>
+    <match>"GET |"POST |"HEAD |"PUT |"DELETE |DPT=80 |DPT=443 |DPT=9080 |DPT=9090 |DPT=3000 </match>
+    <description>HTTP request from Red Team source</description>
+    <group>http_flood,ddos_attack,</group>
+  </rule>
+
+  <!-- Rule 200401: HTTP Flood - Moderate -->
+  <rule id="200401" level="8" frequency="50" timeframe="10">
+    <if_matched_sid>200400</if_matched_sid>
+    <same_source_ip/>
+    <description>HTTP Flood Attack Detected: 50+ requests in 10 seconds</description>
+    <group>http_flood,ddos_attack,goldeneye,</group>
+  </rule>
+
+  <!-- Rule 200402: HTTP Flood to bWAPP -->
+  <rule id="200402" level="10" frequency="100" timeframe="10">
+    <if_matched_sid>200400</if_matched_sid>
+    <if_sid>200020</if_sid>
+    <same_source_ip/>
+    <description>CRITICAL: HTTP Flood on bWAPP (port 9080) - 100+ requests/10s</description>
+    <group>http_flood,ddos_attack,critical,bwapp,goldeneye,</group>
+  </rule>
+
+  <!-- Rule 200403: HTTP Flood to DVWA -->
+  <rule id="200403" level="10" frequency="100" timeframe="10">
+    <if_matched_sid>200400</if_matched_sid>
+    <if_sid>200021</if_sid>
+    <same_source_ip/>
+    <description>CRITICAL: HTTP Flood on DVWA (port 9090) - 100+ requests/10s</description>
+    <group>http_flood,ddos_attack,critical,dvwa,goldeneye,</group>
+  </rule>
+
+  <!-- Rule 200404: HTTP Flood to Juice Shop -->
+  <rule id="200404" level="10" frequency="100" timeframe="10">
+    <if_matched_sid>200400</if_matched_sid>
+    <if_sid>200022</if_sid>
+    <same_source_ip/>
+    <description>CRITICAL: HTTP Flood on OWASP Juice Shop (port 3000) - 100+ requests/10s</description>
+    <group>http_flood,ddos_attack,critical,juiceshop,goldeneye,</group>
+  </rule>
+
+  <!-- Rule 200405: HTTP Flood to Port 80 -->
+  <rule id="200405" level="10" frequency="100" timeframe="10">
+    <if_matched_sid>200400</if_matched_sid>
+    <if_sid>200023</if_sid>
+    <same_source_ip/>
+    <description>CRITICAL: HTTP Flood on HTTP (port 80) - 100+ requests/10s</description>
+    <group>http_flood,ddos_attack,critical,http,goldeneye,</group>
+  </rule>
+
+  <!-- Rule 200406: HTTP Flood to Port 443 -->
+  <rule id="200406" level="10" frequency="100" timeframe="10">
+    <if_matched_sid>200400</if_matched_sid>
+    <if_sid>200024</if_sid>
+    <same_source_ip/>
+    <description>CRITICAL: HTTP Flood on HTTPS (port 443) - 100+ requests/10s</description>
+    <group>http_flood,ddos_attack,critical,https,goldeneye,</group>
+  </rule>
+
+  <!-- Rule 200407: GoldenEye/HULK High-Rate HTTP Requests -->
+  <rule id="200407" level="8" frequency="30" timeframe="10">
+    <if_matched_sid>200400</if_matched_sid>
+    <same_source_ip/>
+    <description>HTTP Flood (GoldenEye/HULK): High-rate requests from single IP</description>
+    <group>http_flood,ddos_attack,goldeneye,hulk,</group>
+  </rule>
+
+  <!-- Rule 200408: Detect random User-Agent cycling (HULK signature) -->
+  <rule id="200408" level="9" frequency="20" timeframe="5">
+    <if_matched_sid>200400</if_matched_sid>
+    <match>Mozilla/5.0|Chrome/|Safari/|Opera/</match>
+    <same_source_ip/>
+    <description>HULK HTTP Flood: Randomized User-Agent cycling detected</description>
+    <group>http_flood,ddos_attack,hulk,evasion,</group>
+  </rule>
+
+  <!-- ========================================================================
+       SLOWLORIS ATTACK DETECTION
+       ======================================================================== -->
+
+  <!-- Rule 200500: Slowloris attack indicators -->
+  <rule id="200500" level="7">
+    <match>X-a:|X-b:|X-c:|X-d:|X-e:|request timeout|AH01630|client sent HTTP/1.1 request without hostname</match>
+    <description>Slowloris Attack: Partial/custom HTTP headers or timeout detected</description>
+    <group>slowloris,ddos_attack,</group>
+  </rule>
+
+  <!-- Rule 200505: Apache MaxClients/connection limit reached (Slowloris impact) -->
+  <rule id="200505" level="9">
+    <match>server reached MaxRequestWorkers|server reached MaxClients|Too many open files|Resource temporarily unavailable</match>
+    <description>Apache connection/resource exhaustion (Slowloris impact)</description>
+    <group>slowloris,ddos_attack,resource_exhaustion,</group>
+  </rule>
+
+  <!-- Rule 200501: Multiple Slow Connections from Red Team -->
+  <rule id="200501" level="9" frequency="20" timeframe="60">
+    <if_matched_sid>200500</if_matched_sid>
+    <same_source_ip/>
+    <description>Slowloris Attack Detected: 20+ slow connections in 60 seconds</description>
+    <group>slowloris,ddos_attack,critical,</group>
+  </rule>
+
+  <!-- Rule 200502: Slowloris to bWAPP -->
+  <rule id="200502" level="10" frequency="30" timeframe="60">
+    <if_matched_sid>200500</if_matched_sid>
+    <if_sid>200020</if_sid>
+    <same_source_ip/>
+    <description>CRITICAL: Slowloris Attack on bWAPP (port 9080)</description>
+    <group>slowloris,ddos_attack,critical,bwapp,</group>
+  </rule>
+
+  <!-- Rule 200503: Slowloris to DVWA -->
+  <rule id="200503" level="10" frequency="30" timeframe="60">
+    <if_matched_sid>200500</if_matched_sid>
+    <if_sid>200021</if_sid>
+    <same_source_ip/>
+    <description>CRITICAL: Slowloris Attack on DVWA (port 9090)</description>
+    <group>slowloris,ddos_attack,critical,dvwa,</group>
+  </rule>
+
+  <!-- Rule 200504: Long-lived connections without completion -->
+  <rule id="200504" level="8">
+    <if_sid>200010,200011,200012,200013,200014,200015,200016,200017,200018,200019</if_sid>
+    <match>connection timeout|incomplete request</match>
+    <description>Slowloris Indicator: Incomplete HTTP request from Red Team</description>
+    <group>slowloris,ddos_attack,</group>
+  </rule>
+
+  <!-- ========================================================================
+       IP SPOOFING DETECTION
+       ======================================================================== -->
+
+  <!-- Rule 100600: Spoofed IP from Private Range -->
+  <rule id="200600" level="6">
+    <if_sid>200001,200002,200003</if_sid>
+    <match>SRC=192.168.|192.168.</match>
+    <description>Possible IP Spoofing: Private IP range 192.168.x.x</description>
+    <group>ip_spoofing,ddos_attack,</group>
+  </rule>
+
+  <rule id="200601" level="6">
+    <if_sid>200001,200002,200003</if_sid>
+    <match>SRC=172.1[6-9].|SRC=172.2[0-9].|SRC=172.3[0-1].|172.1[6-9].|172.2[0-9].|172.3[0-1].</match>
+    <description>Possible IP Spoofing: Private IP range 172.16-31.x.x</description>
+    <group>ip_spoofing,ddos_attack,</group>
+  </rule>
+
+  <rule id="200602" level="6">
+    <if_sid>200001,200002,200003</if_sid>
+    <match>SRC=127.|127.0.0.</match>
+    <description>Possible IP Spoofing: Localhost address from external source</description>
+    <group>ip_spoofing,ddos_attack,</group>
+  </rule>
+
+  <!-- Rule 200603: Sequential IP Pattern (Sequential Spoofing) -->
+  <rule id="200603" level="8" frequency="10" timeframe="5">
+    <if_matched_sid>200600</if_matched_sid>
+    <description>IP Spoofing Attack: Sequential IP addresses detected</description>
+    <group>ip_spoofing,ddos_attack,sequential,</group>
+  </rule>
+
+  <!-- Rule 200604: Spoofed IPs targeting Blue Team ports -->
+  <rule id="200604" level="10" frequency="50" timeframe="10">
+    <if_matched_sid>200600</if_matched_sid>
+    <description>CRITICAL: IP Spoofing DDoS on Blue Team services</description>
+    <group>ip_spoofing,ddos_attack,critical,</group>
+  </rule>
+
+  <!-- ========================================================================
+       DISTRIBUTED ATTACK DETECTION (Multiple Red Team Sources)
+       ======================================================================== -->
+
+  <!-- Rule 100700: Coordinated Attack from Multiple Red Team VMs -->
+  <rule id="200700" level="10" frequency="5" timeframe="10">
+    <if_matched_sid>200101</if_matched_sid>
+    <different_srcip/>
+    <description>CRITICAL: Distributed DDoS - Multiple Red Team sources attacking simultaneously</description>
+    <group>distributed_ddos,coordinated_attack,critical,</group>
+  </rule>
+
+  <!-- Rule 200701: Botnet Attack Pattern -->
+  <rule id="200701" level="10" frequency="3" timeframe="5">
+    <if_matched_sid>200016</if_matched_sid>
+    <description>CRITICAL: Botnet Attack - Traffic from botnet generators</description>
+    <group>botnet_attack,distributed_ddos,critical,</group>
+  </rule>
+
+  <!-- Rule 200702: Cross-Target Attack (Same source hitting multiple Blue Teams) -->
+  <rule id="200702" level="9" frequency="3" timeframe="10">
+    <if_matched_sid>200101</if_matched_sid>
+    <same_source_ip/>
+    <different_dstip/>
+    <description>Multi-Target DDoS: Single Red Team source attacking multiple Blue Team targets</description>
+    <group>multi_target_ddos,ddos_attack,</group>
+  </rule>
+
+  <!-- ========================================================================
+       CONNECTION STATE ANOMALIES
+       ======================================================================== -->
+
+  <!-- Rule 100800: Half-Open Connections (SYN without ACK) -->
+  <rule id="200800" level="5">
+    <if_sid>200010,200011,200012,200013,200014,200015,200016,200017,200018,200019</if_sid>
+    <match>SYN_RECV|SYN_SENT</match>
+    <description>Half-open connection from Red Team</description>
+    <group>syn_flood,connection_state,ddos_attack,</group>
+  </rule>
+
+  <rule id="200805" level="7" frequency="30" timeframe="10">
+    <if_matched_sid>200800</if_matched_sid>
+    <same_source_ip/>
+    <description>SYN Flood Indicator: 30+ half-open connections from Red Team</description>
+    <group>syn_flood,connection_state,ddos_attack,</group>
+  </rule>
+
+  <!-- Rule 200801: Connection Table Exhaustion -->
+  <rule id="200801" level="10">
+    <match>connection table full|out of connection tracking entries</match>
+    <description>CRITICAL: Connection table exhaustion - DDoS impact detected</description>
+    <group>resource_exhaustion,ddos_attack,critical,</group>
+  </rule>
+
+  <!-- Rule 200802: Port Exhaustion -->
+  <rule id="200802" level="10">
+    <match>cannot allocate memory|out of ephemeral ports</match>
+    <description>CRITICAL: Port exhaustion - DDoS impact on resources</description>
+    <group>resource_exhaustion,ddos_attack,critical,</group>
+  </rule>
+
+  <!-- ========================================================================
+       TRAFFIC VOLUME ANOMALIES
+       ======================================================================== -->
+
+  <!-- Rule 100900: High Bandwidth from Red Team -->
+  <rule id="200900" level="8" frequency="500" timeframe="10">
+    <if_matched_sid>200010,200011,200012,200013,200014,200015,200016,200017,200018,200019</if_matched_sid>
+    <description>High Traffic Volume: 500+ packets/10s from Red Team source</description>
+    <group>traffic_anomaly,ddos_attack,</group>
+  </rule>
+
+  <!-- Rule 200901: Extreme Traffic Volume -->
+  <rule id="200901" level="10" frequency="1000" timeframe="10">
+    <if_matched_sid>200010,200011,200012,200013,200014,200015,200016,200017,200018,200019</if_matched_sid>
+    <description>CRITICAL: Extreme Traffic Volume - 1000+ packets/10s from Red Team</description>
+    <group>traffic_anomaly,ddos_attack,critical,</group>
+  </rule>
+
+  <!-- Rule 200902: Traffic to Multiple Ports Simultaneously -->
+  <rule id="200902" level="9" frequency="5" timeframe="5">
+    <if_matched_sid>200020,200021,200022,200023,200024</if_matched_sid>
+    <same_source_ip/>
+    <description>Port Scanning + DDoS: Red Team hitting multiple Blue Team ports</description>
+    <group>multi_port_attack,ddos_attack,</group>
+  </rule>
+
+  <!-- ========================================================================
+       ACTIVE RESPONSE TRIGGERS
+       ======================================================================== -->
+
+  <!-- Rule 101000: Automatic Firewall Block - Critical DDoS -->
+  <rule id="201000" level="12">
+    <if_matched_sid>200101</if_matched_sid>
+    <description>EMERGENCY: Critical DDoS Attack - Active Response Triggered</description>
+    <group>ddos_attack,critical,active_response,</group>
+  </rule>
+
+  <!-- Rule 101001: Alert Security Team -->
+  <rule id="201001" level="11">
+    <if_matched_sid>200700</if_matched_sid>
+    <description>ALERT: Distributed/Coordinated DDoS - Immediate investigation required</description>
+    <group>ddos_attack,security_alert,</group>
+  </rule>
+
+  <!-- Rule 101002: Rate Limiting Trigger -->
+  <rule id="201002" level="10">
+    <if_matched_sid>200401</if_matched_sid>
+    <description>HTTP Flood Mitigation: Rate limiting recommended</description>
+    <group>http_flood,mitigation,</group>
+  </rule>
+
+</group>
+
+<!-- ============================================================================
+     WEB APPLICATION ATTACK DETECTION RULES
+     Cyber Range - Red Team vs Blue Team Exercises
+     ============================================================================
+
+     Purpose: Detect common web application attacks during exercises
+     - SQL Injection (SQLi)
+     - Cross-Site Scripting (XSS)
+     - Command Injection
+     - Brute-force login attempts
+     - Active scanning / fuzzing (ZAP, Burp)
+     - File Upload attacks
+     - XXE / SSRF attacks
+     - Network scanning / reconnaissance
+
+     Rule ID Range: 120001-120091
+     ============================================================================ -->
+
+<group name="cyberrange.attacks">
+
+  <!-- SQL Injection: common tokens/patterns -->
+  <rule id="120001" level="10">
+    <match>(?i)(\bUNION\b.*\bSELECT\b|'\s*or\s*'1'='1|"\s*or\s*"1"="1|--\s*$|/\*.*\*/|\bsleep\s*\(|\bbenchmark\s*\(|\bconcat\s*\()</match>
+    <description>SQL injection attempt detected (common payload tokens)</description>
+    <group>web,attack,sqli</group>
+    <mitre>
+      <id>T1190</id>
+    </mitre>
+  </rule>
+
+  <!-- SQL payloads from provided list -->
+  <rule id="120002" level="12">
+    <match>(?i)(' OR '1'='1|admin' OR '1'='1|UNION\s+SELECT\s+NULL|UNION\s+SELECT)</match>
+    <description>SQL injection (test payload from lab list)</description>
+    <group>web,attack,sqli</group>
+  </rule>
+
+  <!-- Cross-Site Scripting (XSS) -->
+  <rule id="120010" level="9">
+    <match>(?i)(&lt;script\b|javascript:|onerror\s*=|onload\s*=|&lt;img\s+[^&gt;]*src=|&lt;svg\b|&lt;iframe\b)</match>
+    <description>Possible Cross-Site Scripting (XSS) payload detected</description>
+    <group>web,attack,xss</group>
+    <mitre>
+      <id>T1059</id>
+    </mitre>
+  </rule>
+
+  <!-- Command Injection: shell metacharacters and typical payloads -->
+  <rule id="120020" level="12">
+    <match>(?i)(\|\s*cat\s+/etc/passwd|;\s*id\s*$|;\s*ls\s+-|;\s*whoami|;\s*pwd|`whoami`|`id`|\$\(whoami\)|\$\(id\)|;\s*nc\s+-|;\s*bash\s+-c|\buname\s+-a|;\s*wget\s+|;\s*curl\s+)</match>
+    <description>Command injection attempt detected (shell metacharacters)</description>
+    <group>web,attack,cmdinj</group>
+  </rule>
+
+  <rule id="120021" level="12">
+    <match>(?i)(127\.0\.0\.1;\s*ls\s+-la|127\.0\.0\.1\s*&amp;&amp;\s*whoami|\|\s*cat\s+/etc/passwd|`id`|\$\(id\))</match>
+    <description>Command injection payload (from Burp Repeater tests)</description>
+    <group>web,attack,cmdinj</group>
+  </rule>
+
+  <!-- Brute force: repeated failed logins -->
+  <rule id="120029" level="5">
+    <match>(?i)(login failed|invalid credentials|authentication failed|incorrect password|failed login)</match>
+    <description>Failed login attempt</description>
+    <group>web,authentication,</group>
+  </rule>
+
+  <rule id="120030" level="11" frequency="5" timeframe="60">
+    <if_matched_sid>120029</if_matched_sid>
+    <description>Possible login brute force (multiple failed logins from same source)</description>
+    <group>web,attack,bruteforce</group>
+  </rule>
+
+  <!-- Active scanning / fuzzing: high request rate from single IP -->
+  <rule id="120039" level="5">
+    <match>(GET|POST)</match>
+    <description>HTTP request detected</description>
+    <group>web,access,</group>
+  </rule>
+
+  <rule id="120040" level="10" frequency="20" timeframe="60">
+    <if_matched_sid>120039</if_matched_sid>
+    <description>Possible active scanner / fuzzing (high request rate from single IP)</description>
+    <group>web,attack,scanner</group>
+  </rule>
+
+  <!-- Scanning tool user-agent detection (ZAP / Burp) -->
+  <rule id="120050" level="6">
+    <match>(?i)(OWASP ZAP|ZAP_2|ZAP-Commercial|BurpSuite|Burp/|burpsuite)</match>
+    <description>Scanning tool User-Agent detected (ZAP / Burp)</description>
+    <group>web,scanner,tools</group>
+  </rule>
+
+  <!-- Specific targeted endpoints used in the exercises (bWAPP / DVWA / OWASP Juice Shop) -->
+  <rule id="120059" level="7">
+    <match>(?i)(/vulnerabilities/exec|/vulnerabilities/sqli|/vulnerabilities/upload|/vulnerabilities/xss_r/|/bWAPP/|/bWAPP/login\.php)</match>
+    <description>Request to known vulnerable app endpoints (bWAPP/DVWA)</description>
+    <group>web,app,known_vuln</group>
+  </rule>
+
+  <rule id="120060" level="11" frequency="5" timeframe="120">
+    <if_matched_sid>120059</if_matched_sid>
+    <description>Request to known vulnerable app endpoints (bWAPP/DVWA) — targeted in exercises</description>
+    <group>web,app,known_vuln</group>
+  </rule>
+
+  <!-- Target host specific detection (exercise targets) -->
+  <rule id="120061" level="7">
+    <match>(?i)(10\.72\.200\.(51|54|57)(:\d+)?/?.*(/vulnerabilities/exec|/vulnerabilities/sqli|/vulnerabilities/upload|/vulnerabilities/xss_r/|/bWAPP/|/bWAPP/login\.php))</match>
+    <description>Request to exercise target hosts</description>
+    <group>web,app,targeted</group>
+  </rule>
+
+  <rule id="120062" level="11" frequency="5" timeframe="120">
+    <if_matched_sid>120061</if_matched_sid>
+    <description>Request to exercise target hosts for known vulnerable endpoints</description>
+    <group>web,app,targeted</group>
+  </rule>
+
+  <!-- File Upload suspicious filenames / content -->
+  <rule id="120070" level="11">
+    <match>(?i)(filename=.*\.(php|phtml|php5)\b|filename=.*\.(php\.jpg|php%00|jpg\.php)|Content-Disposition:.*filename=.*\.(php|phtml)|Content-Type:\s*(application/x-php|application/php)|&lt;\?php|system\(|exec\(|passthru\()</match>
+    <description>Suspicious file upload attempt (php payload / filename bypass)</description>
+    <group>web,attack,fileupload</group>
+  </rule>
+
+  <rule id="120071" level="12">
+    <match>(?i)(filename=.*\.(php\.jpg|jpg\.php|php%00)|filename=.*\.(php\;|php%3B))</match>
+    <description>Possible file upload bypass attempt (double extension / null byte / encoded separators)</description>
+    <group>web,attack,fileupload</group>
+  </rule>
+
+  <!-- XXE / SSRF detection -->
+  <rule id="120080" level="12">
+    <match>(?i)(&lt;!DOCTYPE\s+[^&gt;]*\[|&lt;!ENTITY\s+[^&gt;]*SYSTEM\s+|SYSTEM\s+"file:/{3}|&lt;!ENTITY\s+%|&amp;\w+;)</match>
+    <description>Possible XXE payload / external entity declaration detected</description>
+    <group>web,attack,xxe</group>
+  </rule>
+
+  <rule id="120081" level="12">
+    <match>(?i)(http://169\.254\.169\.254|http://localhost(:\d+)?|http://127\.0\.0\.1|http://169\.254|file:///etc/passwd)</match>
+    <description>Potential SSRF / XXE exfiltration target (metadata service or local file access)</description>
+    <group>web,attack,ssrf,xxe</group>
+  </rule>
+
+  <!-- Network scanning / reconnaissance detection -->
+  <rule id="120090" level="9">
+    <match>(?i)(Nmap scan report|Nmap Scripting Engine|Nmap/|masscan)</match>
+    <description>Network reconnaissance tool detected in logs (Nmap / masscan)</description>
+    <group>network,scanner,recon</group>
+  </rule>
+
+  <rule id="120091" level="7">
+    <match>(?i)(connection refused|connect\(\) to .*port|SYN|connection timed out|icmp type 3 code 13)</match>
+    <description>Connection attempt or scan indicator</description>
+    <group>network,connection,</group>
+  </rule>
+
+  <rule id="120092" level="10" frequency="50" timeframe="60">
+    <if_matched_sid>120091</if_matched_sid>
+    <description>Possible port scanning activity (many connection attempts across ports)</description>
+    <group>network,scanner,recon</group>
+  </rule>
+
+</group>

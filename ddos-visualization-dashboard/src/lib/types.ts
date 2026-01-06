@@ -3,6 +3,7 @@ export interface VMNode {
   id: string;
   name: string;
   ip: string;
+  wanIp?: string;
   type: "attacker" | "target" | "siem" | "ids";
   role: string;
   status: "online" | "offline" | "attacking" | "under_attack";
