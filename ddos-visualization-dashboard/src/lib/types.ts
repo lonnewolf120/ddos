@@ -3,12 +3,14 @@ export interface VMNode {
   id: string;
   name: string;
   ip: string;
-  wanIp?: string;
+  lanIp?: string;  // OPNsense LAN IP (192.168.x.x)
+  wanIp?: string;  // WAN IP (10.72.200.x)
   type: "attacker" | "target" | "siem" | "ids";
   role: string;
   status: "online" | "offline" | "attacking" | "under_attack";
   services?: Service[];
   position: { x: number; y: number };
+  isPrimary?: boolean;  // Primary attack target
 }
 
 export interface Service {

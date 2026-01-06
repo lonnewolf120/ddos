@@ -48,13 +48,34 @@ SSH_KEY_PATH = os.getenv('SSH_KEY_PATH', '')
 API_HOST = os.getenv('API_HOST', '0.0.0.0')
 API_PORT = int(os.getenv('API_PORT', '8841'))
 
-# Red Team VMs Configuration
+# Red Team VMs Configuration (ONLY VMs with OPNsense LAN IP access)
 RED_TEAM_VMS = {
-    "scheduler": {"ip": "10.10.30.30", "name": "Attack Scheduler", "role": "Coordination"},
-        "generator": {"ip": "10.10.30.50", "name": "Attack Generator", "role": "Primary Attacker"},
-        "gui": {"ip": "10.10.30.40", "name": "Red Team GUI", "role": "C2 Interface"},
-    "botnet1": {"ip": "10.72.200.64", "name": "Botnet Generator 1", "role": "Distributed Attack"},
-    "botnet2": {"ip": "10.72.200.65", "name": "Botnet Generator 2", "role": "Distributed Attack"},
+    # COMMENTED OUT - No OPNsense LAN IP
+    # "scheduler": {"ip": "10.10.30.30", "wan_ip": "10.72.200.61", "name": "Attack Scheduler", "role": "Coordination"},
+    # "gui": {"ip": "10.10.30.40", "wan_ip": "10.72.200.63", "name": "Red Team GUI", "role": "C2 Interface"},
+
+    # ACTIVE - VMs with OPNsense LAN IP (192.168.60.x)
+    "generator": {
+        "ip": "10.10.30.50",
+        "lan_ip": "192.168.60.62",
+        "wan_ip": "10.72.200.62",
+        "name": "Attack Generator",
+        "role": "Primary Attacker"
+    },
+    "botnet1": {
+        "ip": "10.10.30.60",
+        "lan_ip": "192.168.60.64",
+        "wan_ip": "10.72.200.64",
+        "name": "Botnet Generator 1",
+        "role": "Distributed Attack"
+    },
+    "botnet2": {
+        "ip": "10.10.30.60",
+        "lan_ip": "192.168.60.65",
+        "wan_ip": "10.72.200.65",
+        "name": "Botnet Generator 2",
+        "role": "Distributed Attack"
+    },
 }
 
 # Blue Team Targets Configuration
@@ -299,7 +320,7 @@ class IPSpoofingUtil:
                     sequential_ips.append(str(next_ip))
                 except ipaddress.AddressValueError:
                     # Stop if we reach the maximum IP address
-                    logger.warning(f"Reached maximum IP address at {next_ip}")
+                    logger.warning(f"Reached maximum IP address at offset {i}")
                     break
 
             return sequential_ips
