@@ -271,6 +271,10 @@ export default function DDoSDashboard() {
   const [blueTeamVMs, setBlueTeamVMs] = useState<VMNode[]>(BLUE_TEAM_VMS);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [selectedTarget, setSelectedTarget] = useState<string>('');
+  const [useCustomTarget, setUseCustomTarget] = useState(false);
+  const [customTargetIp, setCustomTargetIp] = useState('');
+  const [customTargetPort, setCustomTargetPort] = useState(3000);
+  const [customIpError, setCustomIpError] = useState('');
   const [attackConfig, setAttackConfig] = useState<AttackConfig>({
     attackType: 'http_flood',
     sourceVMs: [],
@@ -297,6 +301,26 @@ export default function DDoSDashboard() {
   const [ipCount, setIpCount] = useState(10);
   const [generatedIps, setGeneratedIps] = useState<string[]>([]);
   const [commonIpRanges, setCommonIpRanges] = useState<string[]>([]);
+
+  // Validate custom IP is in 192.168.x.x range
+  const validateCustomIp = (ip: string): boolean => {
+    const ipRegex = /^192\.168\.\d{1,3}\.\d{1,3}$/;
+    if (!ipRegex.test(ip)) {
+      setCustomIpError('IP must be in 192.168.x.x range');
+      return false;
+    }
+    const parts = ip.split('.');
+    const valid = parts.every(part => {
+      const num = parseInt(part);
+      return num >= 0 && num <= 255;
+    });
+    if (!valid) {
+      setCustomIpError('Invalid IP address octets');
+      return false;
+    }
+    setCustomIpError('');
+    return true;
+  };
 
   // Check API connection
   const checkApiConnection = useCallback(async () => {
@@ -474,10 +498,24 @@ export default function DDoSDashboard() {
       addLog('error', 'No source VMs selected');
       return;
     }
-    if (!selectedTarget) {
-      addLog('error', 'No target selected');
-      return;
+
+    // Validate target selection
+    if (useCustomTarget) {
+      if (!customTargetIp || !validateCustomIp(customTargetIp)) {
+        addLog('error', 'Invalid custom target IP. Must be in 192.168.x.x range');
+        return;
+      }
+      if (!customTargetPort || customTargetPort < 1 || customTargetPort > 65535) {
+        addLog('error', 'Invalid custom target port');
+        return;
+      }
+    } else {
+      if (!selectedTarget) {
+        addLog('error', 'No target selected');
+        return;
+      }
     }
+
     if (ipSpoofingEnabled && generatedIps.length === 0) {
       addLog('error', 'IP spoofing enabled but no IPs generated. Click "Generate Random IPs" first.');
       return;
@@ -487,7 +525,13 @@ export default function DDoSDashboard() {
     setAttackLogs([]);
     addLog('info', `Starting ${attackConfig.attackType} attack...`);
     addLog('info', `Sources: ${selectedSources.join(', ')}`);
-    addLog('info', `Target: ${selectedTarget}:${attackConfig.targetPort}`);
+
+    // Use custom target if enabled, otherwise use selected target
+    const targetIp = useCustomTarget ? customTargetIp : (BLUE_TEAM_VMS.find(vm => vm.id === selectedTarget)?.ip || '');
+    const targetPort = useCustomTarget ? customTargetPort : attackConfig.targetPort;
+    const targetId = useCustomTarget ? 'custom' : selectedTarget;
+
+    addLog('info', `Target: ${targetIp}:${targetPort}${useCustomTarget ? ' (Custom)' : ''}`);
     if (ipSpoofingEnabled) {
       addLog('info', `IP Spoofing: Enabled (${generatedIps.length} spoofed IPs)`);
     }
@@ -499,8 +543,9 @@ export default function DDoSDashboard() {
         body: JSON.stringify({
           attack_type: attackConfig.attackType,
           source_vms: selectedSources,
-          target_id: selectedTarget,
-          target_port: attackConfig.targetPort,
+          target_id: targetId,
+          target_ip: useCustomTarget ? customTargetIp : undefined,
+          target_port: targetPort,
           duration: attackConfig.duration,
           workers: attackConfig.workers,
           sockets: attackConfig.sockets,
@@ -517,8 +562,8 @@ export default function DDoSDashboard() {
           attack_id: data.attack_id,
           attack_type: attackConfig.attackType,
           source_vms: selectedSources,
-          target_ip: BLUE_TEAM_VMS.find(vm => vm.id === selectedTarget)?.ip || '',
-          target_port: attackConfig.targetPort,
+          target_ip: targetIp,
+          target_port: targetPort,
           duration: attackConfig.duration,
           status: 'running',
           start_time: new Date().toISOString(),
@@ -728,7 +773,13 @@ export default function DDoSDashboard() {
                                 isSelected={selectedTarget === vm.id}
                                 isTarget={selectedTarget === vm.id}
                                 isAttacking={activeAttack?.status === 'running' && selectedTarget === vm.id}
-                                onClick={() => setSelectedTarget(vm.id)}
+                                onClick={() => {
+                                  setSelectedTarget(vm.id);
+                                  // Auto-set port 3000 when bank is selected
+                                  if (vm.id === 'bank') {
+                                    setAttackConfig({ ...attackConfig, targetPort: 3000 });
+                                  }
+                                }}
                               />
                             ))}
                           </div>
@@ -799,18 +850,85 @@ export default function DDoSDashboard() {
                         <Select
                           value={attackConfig.targetPort.toString()}
                           onValueChange={(value) => setAttackConfig({ ...attackConfig, targetPort: parseInt(value) })}
+                          disabled={useCustomTarget}
                         >
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent className="bg-gray-900 border-gray-700">
-                            <SelectItem value="9080" className="bg-gray-900 hover:bg-gray-800 focus:bg-gray-800">9080 (DVWA)</SelectItem>
-                            <SelectItem value="9090" className="bg-gray-900 hover:bg-gray-800 focus:bg-gray-800">9090 (bWAPP)</SelectItem>
-                            <SelectItem value="3000" className="bg-gray-900 hover:bg-gray-800 focus:bg-gray-800">3000 (Juice Shop)</SelectItem>
-                            <SelectItem value="80" className="bg-gray-900 hover:bg-gray-800 focus:bg-gray-800">80 (HTTP)</SelectItem>
-                            <SelectItem value="443" className="bg-gray-900 hover:bg-gray-800 focus:bg-gray-800">443 (HTTPS)</SelectItem>
+                            {selectedTarget === 'bank' ? (
+                              <SelectItem value="3000" className="bg-gray-900 hover:bg-gray-800 focus:bg-gray-800">3000 (Bank Website)</SelectItem>
+                            ) : (
+                              <>
+                                <SelectItem value="9080" className="bg-gray-900 hover:bg-gray-800 focus:bg-gray-800">9080 (DVWA)</SelectItem>
+                                <SelectItem value="9090" className="bg-gray-900 hover:bg-gray-800 focus:bg-gray-800">9090 (bWAPP)</SelectItem>
+                                <SelectItem value="3000" className="bg-gray-900 hover:bg-gray-800 focus:bg-gray-800">3000 (Juice Shop)</SelectItem>
+                                <SelectItem value="80" className="bg-gray-900 hover:bg-gray-800 focus:bg-gray-800">80 (HTTP)</SelectItem>
+                                <SelectItem value="443" className="bg-gray-900 hover:bg-gray-800 focus:bg-gray-800">443 (HTTPS)</SelectItem>
+                              </>
+                            )}
                           </SelectContent>
                         </Select>
+                      </div>
+
+                      {/* Custom Target Section */}
+                      <div className="space-y-3 p-4 bg-gray-800/30 rounded-lg border border-gray-700">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-semibold flex items-center gap-2">
+                            <Target className="w-4 h-4" />
+                            Custom Target
+                          </Label>
+                          <Switch
+                            checked={useCustomTarget}
+                            onCheckedChange={(checked) => {
+                              setUseCustomTarget(checked);
+                              if (!checked) {
+                                setCustomIpError('');
+                              }
+                            }}
+                          />
+                        </div>
+
+                        {useCustomTarget && (
+                          <div className="space-y-3 pt-2">
+                            <div className="space-y-2">
+                              <Label className="text-xs text-gray-400">Target IP (192.168.x.x only)</Label>
+                              <Input
+                                type="text"
+                                placeholder="192.168.50.101"
+                                value={customTargetIp}
+                                onChange={(e) => {
+                                  setCustomTargetIp(e.target.value);
+                                  if (e.target.value) validateCustomIp(e.target.value);
+                                }}
+                                className={`h-10 ${customIpError ? 'border-red-500' : ''}`}
+                              />
+                              {customIpError && (
+                                <p className="text-xs text-red-500 flex items-center gap-1">
+                                  <AlertTriangle className="w-3 h-3" />
+                                  {customIpError}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label className="text-xs text-gray-400">Target Port</Label>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={65535}
+                                placeholder="3000"
+                                value={customTargetPort}
+                                onChange={(e) => setCustomTargetPort(parseInt(e.target.value) || 3000)}
+                                className="h-10"
+                              />
+                            </div>
+
+                            <div className="text-xs text-gray-500 bg-gray-900/50 p-2 rounded">
+                              ⚠️ Security: Only 192.168.x.x IPs allowed
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Duration */}

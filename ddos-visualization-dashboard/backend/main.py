@@ -166,6 +166,7 @@ class AttackRequest(BaseModel):
     attack_type: str
     source_vms: List[str]
     target_id: str
+    target_ip: Optional[str] = None  # Custom target IP (must be 192.168.x.x)
     target_port: int = 9080
     duration: int = 120
     workers: int = 50
@@ -460,10 +461,26 @@ class AttackOrchestrator:
         """Run a distributed attack from multiple VMs"""
 
         attack_id = str(uuid.uuid4())
-        target_ip = BLUE_TEAM_TARGETS.get(request.target_id, {}).get("ip")
 
-        if not target_ip:
-            raise HTTPException(status_code=400, detail=f"Unknown target: {request.target_id}")
+        # Handle custom target IP with validation
+        if request.target_ip:
+            # Validate custom IP is in 192.168.x.x range
+            try:
+                ip = ipaddress.ip_address(request.target_ip)
+                if not str(ip).startswith('192.168.'):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Custom target IP must be in 192.168.x.x range for security"
+                    )
+                target_ip = request.target_ip
+                logger.info(f"Using custom target IP: {target_ip}")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid IP address format")
+        else:
+            # Use predefined target
+            target_ip = BLUE_TEAM_TARGETS.get(request.target_id, {}).get("ip")
+            if not target_ip:
+                raise HTTPException(status_code=400, detail=f"Unknown target: {request.target_id}")
 
         # Validate source VMs
         source_ips = []
