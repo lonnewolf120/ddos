@@ -63,6 +63,14 @@ interface AttackConfig {
   sockets: number;
   enableIpSpoofing?: boolean;
   spoofedIps?: string[];
+  // Enhanced parameters from ddos_simulation
+  attackIntensity?: 'low' | 'medium' | 'high' | 'extreme';
+  enableDistributedCoordination?: boolean;
+  packetSize?: number;  // bytes
+  enableStatisticsCollection?: boolean;
+  multiPortTargeting?: number[];
+  customHeaders?: { [key: string]: string };
+  enableRandomization?: boolean;
 }
 
 interface AttackLog {
@@ -82,6 +90,19 @@ interface ActiveAttack {
   status: string;
   start_time: string;
   end_time?: string;
+  // Enhanced statistics from ddos_simulation
+  packets_sent?: number;
+  bytes_sent?: number;
+  requests_per_second?: number;
+  response_codes?: { [key: string]: number };
+  connection_success_rate?: number;
+  average_response_time?: number;
+  error_count?: number;
+  bandwidth_used?: number;  // Mbps
+  concurrent_connections?: number;
+  attack_intensity?: 'low' | 'medium' | 'high' | 'extreme';
+  distributed_coordination?: boolean;
+  vm_coordination_status?: { [key: string]: string };
 }
 
 // ============================================================================
@@ -112,6 +133,10 @@ const ATTACK_TYPES = [
   { id: 'slowloris', name: 'Slowloris', description: 'Slow HTTP attack', color: '#22c55e' },
   { id: 'icmp_flood', name: 'ICMP Flood', description: 'Ping flood attack', color: '#3b82f6' },
   { id: 'hulk', name: 'HULK', description: 'HTTP Unbearable Load King', color: '#8b5cf6' },
+  // Enhanced attack types from ddos_simulation
+  { id: 'hping_heavy', name: 'HPING Heavy', description: 'High-intensity HPING attack', color: '#dc2626' },
+  { id: 'scapy_flood', name: 'Scapy Flood', description: 'Custom packet flood with Scapy', color: '#059669' },
+  { id: 'distributed_http', name: 'Distributed HTTP', description: 'Coordinated HTTP flood from multiple sources', color: '#7c3aed' },
 ];
 
 // ============================================================================
@@ -285,6 +310,14 @@ export default function DDoSDashboard() {
     sockets: 100,
     enableIpSpoofing: false,
     spoofedIps: [],
+    // Enhanced parameters from ddos_simulation
+    attackIntensity: 'medium',
+    enableDistributedCoordination: true,
+    packetSize: 1024,
+    enableStatisticsCollection: true,
+    multiPortTargeting: undefined,
+    customHeaders: undefined,
+    enableRandomization: true,
   });
   const [activeAttack, setActiveAttack] = useState<ActiveAttack | null>(null);
   const [attackLogs, setAttackLogs] = useState<AttackLog[]>([]);
@@ -454,6 +487,40 @@ export default function DDoSDashboard() {
           if (data.stderr) {
             addLog('warning', `Stderr: ${data.stderr.substring(0, 300)}`, data.source);
           }
+          // Extract and update statistics from completion messages
+          if (data.statistics) {
+            setActiveAttack(prev => prev ? {
+              ...prev,
+              packets_sent: data.statistics.packets_sent || prev.packets_sent,
+              bytes_sent: data.statistics.bytes_sent || prev.bytes_sent,
+              requests_per_second: data.statistics.requests_per_second || prev.requests_per_second,
+              bandwidth_used: data.statistics.bandwidth_used || prev.bandwidth_used,
+              concurrent_connections: data.statistics.concurrent_connections || prev.concurrent_connections,
+            } : null);
+          }
+        } else if (data.type === 'statistics') {
+          // Enhanced statistics updates from ddos_simulation
+          addLog('info',
+            `📊 Stats: ${data.stats?.packets_sent || 0} packets, ` +
+            `${(data.stats?.bandwidth_used || 0).toFixed(1)} Mbps, ` +
+            `${data.stats?.concurrent_connections || 0} connections`,
+            data.source
+          );
+          setActiveAttack(prev => prev ? {
+            ...prev,
+            packets_sent: data.stats?.packets_sent || prev.packets_sent,
+            bytes_sent: data.stats?.bytes_sent || prev.bytes_sent,
+            requests_per_second: data.stats?.requests_per_second || prev.requests_per_second,
+            bandwidth_used: data.stats?.bandwidth_used || prev.bandwidth_used,
+            concurrent_connections: data.stats?.concurrent_connections || prev.concurrent_connections,
+            response_codes: data.stats?.response_codes || prev.response_codes,
+            connection_success_rate: data.stats?.connection_success_rate || prev.connection_success_rate,
+            average_response_time: data.stats?.average_response_time || prev.average_response_time,
+            error_count: data.stats?.error_count || prev.error_count,
+          } : null);
+        } else if (data.type === 'progress') {
+          // Progress updates from enhanced executor
+          addLog('info', data.message, data.source);
         } else if (data.type === 'complete') {
           addLog('success', 'Attack completed successfully');
           setActiveAttack(prev => prev ? { ...prev, status: 'completed' } : null);
@@ -551,6 +618,14 @@ export default function DDoSDashboard() {
           sockets: attackConfig.sockets,
           enable_ip_spoofing: ipSpoofingEnabled,
           spoofed_ips: ipSpoofingEnabled ? generatedIps : [],
+          // Enhanced parameters from ddos_simulation
+          attack_intensity: attackConfig.attackIntensity || 'medium',
+          enable_distributed_coordination: attackConfig.enableDistributedCoordination !== false,
+          packet_size: attackConfig.packetSize || 1024,
+          enable_statistics_collection: attackConfig.enableStatisticsCollection !== false,
+          multi_port_targeting: attackConfig.multiPortTargeting,
+          custom_headers: attackConfig.customHeaders,
+          enable_randomization: attackConfig.enableRandomization !== false,
         }),
       });
 
@@ -567,6 +642,19 @@ export default function DDoSDashboard() {
           duration: attackConfig.duration,
           status: 'running',
           start_time: new Date().toISOString(),
+          // Enhanced statistics fields from ddos_simulation
+          attack_intensity: attackConfig.attackIntensity || 'medium',
+          distributed_coordination: attackConfig.enableDistributedCoordination !== false,
+          packets_sent: 0,
+          bytes_sent: 0,
+          requests_per_second: 0,
+          bandwidth_used: 0,
+          concurrent_connections: 0,
+          response_codes: {},
+          connection_success_rate: 0,
+          average_response_time: 0,
+          error_count: 0,
+          vm_coordination_status: {},
         });
 
         // Small delay to allow attack registration, then connect WebSocket
@@ -942,6 +1030,34 @@ export default function DDoSDashboard() {
                           onChange={(e) => setAttackConfig({ ...attackConfig, duration: parseInt(e.target.value) || 120 })}
                           className="h-11"
                         />
+                      </div>
+
+                      {/* Attack Intensity */}
+                      <div className="space-y-3">
+                        <Label className="text-sm font-semibold">Attack Intensity</Label>
+                        <Select
+                          value={attackConfig.attackIntensity || 'medium'}
+                          onValueChange={(value) => setAttackConfig({
+                            ...attackConfig,
+                            attackIntensity: value as 'low' | 'medium' | 'high' | 'extreme'
+                          })}
+                        >
+                          <SelectTrigger className="h-11">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="low">🟢 Low - Minimal impact</SelectItem>
+                            <SelectItem value="medium">🟡 Medium - Moderate impact</SelectItem>
+                            <SelectItem value="high">🟠 High - Significant impact</SelectItem>
+                            <SelectItem value="extreme">🔴 Extreme - Maximum impact</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <div className="text-xs text-gray-500">
+                          {attackConfig.attackIntensity === 'low' && 'Low packet rate, minimal system impact'}
+                          {attackConfig.attackIntensity === 'medium' && 'Standard packet rate, moderate impact'}
+                          {attackConfig.attackIntensity === 'high' && 'High packet rate, significant impact'}
+                          {attackConfig.attackIntensity === 'extreme' && 'Maximum packet rate, severe impact'}
+                        </div>
                       </div>
 
                       {/* Workers (for HTTP floods) */}
@@ -1336,6 +1452,55 @@ export default function DDoSDashboard() {
                         {activeAttack?.status || 'IDLE'}
                       </Badge>
                     </div>
+
+                    {/* Enhanced Statistics from ddos_simulation */}
+                    {activeAttack && (
+                      <>
+                        <div className="border-t border-gray-700 pt-4">
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400">Packets Sent</span>
+                            <span className="text-lg font-bold text-yellow-400">
+                              {activeAttack.packets_sent?.toLocaleString() || '0'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400">Bytes Sent</span>
+                            <span className="text-lg font-bold text-blue-400">
+                              {activeAttack.bytes_sent ? `${(activeAttack.bytes_sent / 1024 / 1024).toFixed(2)} MB` : '0 MB'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400">Req/sec</span>
+                            <span className="text-lg font-bold text-green-400">
+                              {activeAttack.requests_per_second?.toFixed(1) || '0.0'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400">Bandwidth</span>
+                            <span className="text-lg font-bold text-purple-400">
+                              {activeAttack.bandwidth_used ? `${activeAttack.bandwidth_used.toFixed(2)} Mbps` : '0 Mbps'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400">Connections</span>
+                            <span className="text-lg font-bold text-orange-400">
+                              {activeAttack.concurrent_connections || '0'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400">Intensity</span>
+                            <Badge
+                              variant={
+                                activeAttack.attack_intensity === 'extreme' ? 'destructive' :
+                                  activeAttack.attack_intensity === 'high' ? 'default' : 'secondary'
+                              }
+                            >
+                              {(activeAttack.attack_intensity || 'medium').toUpperCase()}
+                            </Badge>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
 
