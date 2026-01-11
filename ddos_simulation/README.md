@@ -22,7 +22,7 @@ python3 stop_attacks.py  # Stops all attacks on all Red Team VMs
 
 ## Options:
 
-There are 3 different DDoS attacks:
+There are multiple DDoS attack types supported (network floods + target-local stress):
 
 - Flood
 
@@ -30,6 +30,11 @@ There are 3 different DDoS attacks:
 
 - Black nurse
 
+- HPING heavy packet floods (large payloads) - `hping3` with large -d to stress packet processing
+
+- Target-local CPU stress (`target_stress_cpu`) and Memory stress (`target_stress_mem`) using `stress-ng` or a fallback helper script
+
+**Safety**: Target-local stress runs CPU/memory load on the target host — only use on isolated lab/cyber-range VMs.
 
 You can set different options filling the "config.py" file:
 

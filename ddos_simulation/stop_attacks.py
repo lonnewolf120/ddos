@@ -16,11 +16,12 @@ SSH_KEY_PATH = os.path.expanduser(os.getenv('SSH_KEY_PATH', '~/.ssh/cyber_range_
 SSH_PORT = int(os.getenv('SSH_PORT', '22'))
 
 # Red Team VMs
-RED_TEAM_VMS = [
-    "10.72.200.62",  # generator
-    "10.72.200.64",  # botnet1
-    "10.72.200.65",  # botnet2
-]
+# We'll query orchestrator to get both Red Team and Blue Team hosts to ensure target-side stress processes are stopped as well
+from distributed_ddos_executor import DDoSOrchestrator
+orchestrator = DDoSOrchestrator()
+RED_TEAM_VMS = list(orchestrator.red_team_vms.values())
+BLUE_TEAM_VMS = list(orchestrator.blue_team_targets.values())
+ALL_HOSTS = RED_TEAM_VMS + BLUE_TEAM_VMS
 
 def stop_all_attack_processes(hostname: str):
     """
@@ -35,6 +36,10 @@ def stop_all_attack_processes(hostname: str):
         "sudo pkill -9 -f goldeneye",
         "sudo pkill -9 -f scapy_ddos",
         "sudo pkill -9 -f hulk",
+        # Target stress helpers
+        "sudo pkill -9 -f /opt/target_stress.sh",
+        "sudo pkill -9 -f stress-ng",
+        "sudo pkill -9 -f stress",
     ]
 
     try:
@@ -80,9 +85,10 @@ if __name__ == "__main__":
     print("🛑 EMERGENCY STOP - All DDoS Attacks")
     print("=" * 60)
 
-    for vm_ip in RED_TEAM_VMS:
+    # Stop on both Red Team attack VMs and Blue Team targets to ensure any target-local stress processes are stopped
+    for vm_ip in ALL_HOSTS:
         stop_all_attack_processes(vm_ip)
 
     print("\n" + "=" * 60)
-    print("✅ All attack processes stopped!")
+    print("✅ All attack processes stopped on all known hosts!")
     print("=" * 60)

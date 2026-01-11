@@ -98,7 +98,8 @@ execute_scapy_flood(
 ```python
 execute_distributed_attack(
     attack_type: str,        # "http_flood", "syn_flood", "udp_flood",
-                             # "slowloris", "scapy_syn", "scapy_udp", "scapy_icmp"
+                             # "slowloris", "scapy_syn", "scapy_udp", "scapy_icmp",
+                             # "hping_heavy", "target_stress_cpu", "target_stress_mem"
     target_team: str,        # "team1", "team2", "team3"
     target_port: int = 80,
     duration: int = 300,
@@ -203,6 +204,7 @@ sudo pkill -9 -f "hping3|slowloris|goldeneye|scapy_ddos|hulk"
 | GoldenEye | `python3.*goldeneye` |
 | Scapy DDoS | `python3.*scapy_ddos` |
 | HULK | `python3.*hulk` |
+| Target stress | `/opt/target_stress.sh` (or `stress-ng`) |
 
 These patterns are used by `pkill -f` to identify and kill processes.
 
@@ -215,5 +217,7 @@ These patterns are used by `pkill -f` to identify and kill processes.
 ✅ **Monitor status** - call `get_attack_status()` periodically
 ✅ **Always export results** - call `export_results()` before exiting
 ✅ **Keep stop_attacks.py handy** - for emergency shutdowns
+
+⚠️ **Safety note**: `target_stress_cpu` and `target_stress_mem` run CPU/memory load on the target host — only use on isolated lab/cyber-range VMs. Avoid running these against production or externally reachable hosts.
 
 ⚠️ **Note**: Attacks in background mode won't return stdout/stderr until completion
